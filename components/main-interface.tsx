@@ -5,14 +5,41 @@ import { Button } from "@/components/ui/button"
 import { FileText, Table, Download, Plus } from "lucide-react"
 import { ScriptView } from "@/components/script-view"
 import { TableView } from "@/components/table-view"
+import { useDocumentStore } from '@/lib/stores/documentStore'
+
+// Interfaces para tipagem TypeScript
+interface Asset {
+  id: string
+  type: string
+  value: string
+  source?: string
+}
+
+interface Scene {
+  id: string
+  narrativeText: string
+  rawComment: string
+  status: 'Pendente' | 'Concluído'
+  editorNotes: string
+  assets: Asset[]
+}
+
+interface GoogleDocData {
+  title: string
+  body: any
+  comments: Record<string, any>
+  documentId: string
+  revisionId: string
+}
 
 interface MainInterfaceProps {
-  scriptData: any
   onNewScript: () => void
 }
 
-export function MainInterface({ scriptData, onNewScript }: MainInterfaceProps) {
+export function MainInterface({ onNewScript }: MainInterfaceProps) {
   const [activeView, setActiveView] = useState<"script" | "table">("script")
+  const documentData = useDocumentStore((state) => state.documentData)
+  const scenes = useDocumentStore((state) => state.scenes)
 
   const handleExport = () => {
     // Export logic
@@ -79,7 +106,11 @@ export function MainInterface({ scriptData, onNewScript }: MainInterfaceProps) {
 
       {/* Main Content */}
       <main className="flex-1">
-        {activeView === "script" ? <ScriptView scriptData={scriptData} /> : <TableView scriptData={scriptData} />}
+        {activeView === "script" ? (
+          <ScriptView documentData={documentData} scenes={scenes} />
+        ) : (
+          <TableView scenes={scenes} />
+        )}
       </main>
     </div>
   )

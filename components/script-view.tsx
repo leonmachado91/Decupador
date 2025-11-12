@@ -4,31 +4,69 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MessageSquare } from "lucide-react"
 
-interface ScriptViewProps {
-  scriptData: any
+// Interfaces para tipagem TypeScript
+interface Scene {
+  id: string
+  narrativeText: string
+  rawComment: string
+  status: 'Pendente' | 'Concluído'
+  editorNotes: string
+  assets: any[]
 }
 
-export function ScriptView({ scriptData }: ScriptViewProps) {
-  const mockComments = [
-    {
-      id: 1,
-      text: "CENA 01 - INT. ESCRITÓRIO - DIA",
-      linkedText: "Cena de abertura no escritório",
-      status: "pending",
-    },
-    {
-      id: 2,
-      text: 'Adicionar música de fundo: "Ambient Corporate"',
-      linkedText: "música ambiente",
-      status: "pending",
-    },
-    {
-      id: 3,
-      text: "Timestamp: 00:15 - Transição para próxima cena",
-      linkedText: "transição",
-      status: "completed",
-    },
-  ]
+interface GoogleDocData {
+  title: string
+  body: any
+  comments: Record<string, any>
+  documentId: string
+  revisionId: string
+}
+
+interface ScriptViewProps {
+  documentData: GoogleDocData | null
+  scenes: Scene[]
+}
+
+export function ScriptView({ documentData, scenes }: ScriptViewProps) {
+  // Função para extrair texto formatado do corpo do documento
+  const extractFormattedText = (content: any): string => {
+    if (!content || !content.content) return ""
+    
+    let text = ""
+    content.content.forEach((element: any) => {
+      if (element.paragraph) {
+        element.paragraph.elements?.forEach((el: any) => {
+          if (el.textRun) {
+            text += el.textRun.content || ""
+          }
+        })
+        text += "\n"
+      }
+    })
+    
+    return text
+  }
+
+  // Função para renderizar o conteúdo do documento
+  const renderDocumentContent = () => {
+    if (!documentData?.body) return <p>Conteúdo não disponível</p>
+    
+    // Extrair e formatar o texto do documento
+    const documentText = extractFormattedText(documentData.body)
+    
+    // Dividir o texto em parágrafos
+    const paragraphs = documentText.split('\n').filter(p => p.trim() !== '')
+    
+    return (
+      <div className="prose prose-invert max-w-none space-y-4">
+        {paragraphs.map((paragraph, index) => (
+          <p key={index} className="text-base leading-relaxed text-foreground/90">
+            {paragraph}
+          </p>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
@@ -36,39 +74,12 @@ export function ScriptView({ scriptData }: ScriptViewProps) {
       <div className="flex-[7] overflow-y-auto border-r border-border p-8">
         <div className="mx-auto max-w-4xl space-y-6">
           <div>
-            <h2 className="text-3xl font-bold mb-2">{scriptData.title}</h2>
+            <h2 className="text-3xl font-bold mb-2">{documentData?.title || "Documento sem título"}</h2>
             <p className="text-muted-foreground">Roteiro importado do Google Docs</p>
           </div>
 
           <Card className="p-8 bg-card/50">
-            <div className="prose prose-invert max-w-none space-y-4">
-              <p className="text-lg leading-relaxed">
-                <span className="hover:bg-primary/20 cursor-pointer transition-colors rounded px-1">
-                  CENA 01 - INT. ESCRITÓRIO - DIA
-                </span>
-              </p>
-
-              <p className="text-base leading-relaxed text-foreground/90">
-                João entra no escritório carregando uma pasta de documentos. A{" "}
-                <span className="hover:bg-primary/20 cursor-pointer transition-colors rounded px-1">
-                  música ambiente
-                </span>{" "}
-                toca suavemente ao fundo enquanto ele se aproxima de sua mesa.
-              </p>
-
-              <p className="text-base leading-relaxed text-foreground/90">
-                Ele abre o computador e começa a revisar os relatórios do dia. Uma{" "}
-                <span className="hover:bg-primary/20 cursor-pointer transition-colors rounded px-1">transição</span>{" "}
-                suave leva para a próxima cena.
-              </p>
-
-              <p className="text-lg leading-relaxed mt-8">CENA 02 - EXT. RUA - DIA</p>
-
-              <p className="text-base leading-relaxed text-foreground/90">
-                João caminha pela rua movimentada da cidade. O som do tráfego e das pessoas conversando cria uma
-                atmosfera urbana vibrante.
-              </p>
-            </div>
+            {renderDocumentContent()}
           </Card>
         </div>
       </div>
@@ -80,28 +91,28 @@ export function ScriptView({ scriptData }: ScriptViewProps) {
             <MessageSquare className="h-5 w-5 text-primary" />
             <h3 className="text-lg font-semibold">Diretrizes</h3>
             <Badge variant="secondary" className="ml-auto">
-              {mockComments.length}
+              {scenes.length}
             </Badge>
           </div>
 
-          {mockComments.map((comment) => (
+          {scenes.map((scene) => (
             <Card
-              key={comment.id}
+              key={scene.id}
               className="p-4 cursor-pointer transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-relaxed">{comment.text}</p>
+                  <p className="text-sm font-medium leading-relaxed">{scene.rawComment}</p>
                   <Badge
-                    variant={comment.status === "completed" ? "default" : "secondary"}
-                    className={comment.status === "completed" ? "bg-chart-1" : ""}
+                    variant={scene.status === "Concluído" ? "default" : "secondary"}
+                    className={scene.status === "Concluído" ? "bg-chart-1" : ""}
                   >
-                    {comment.status === "completed" ? "Concluído" : "Pendente"}
+                    {scene.status === "Concluído" ? "Concluído" : "Pendente"}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <div className="h-1 w-1 rounded-full bg-primary" />
-                  <span>Vinculado a: "{comment.linkedText}"</span>
+                  <span>Vinculado a: "{scene.narrativeText}"</span>
                 </div>
               </div>
             </Card>

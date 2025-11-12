@@ -23,7 +23,7 @@ export default function Home() {
       {!isImported ? (
         <ImportScreen onImport={handleImport} />
       ) : (
-        <MainInterface scriptData={scriptData} onNewScript={handleNewScript} />
+        <MainInterface onNewScript={handleNewScript} />
       )}
     </div>
   )

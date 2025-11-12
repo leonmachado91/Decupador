@@ -7,40 +7,59 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit, ExternalLink } from "lucide-react"
 import { BreakdownModal } from "@/components/breakdown-modal"
+import { useDocumentStore } from '@/lib/stores/documentStore'
 
-interface TableViewProps {
-  scriptData: any
+// Interfaces para tipagem TypeScript
+interface Asset {
+  id: string
+  type: string
+  value: string
+  source?: string
 }
 
-export function TableView({ scriptData }: TableViewProps) {
-  const [selectedRow, setSelectedRow] = useState<number | null>(null)
+interface Scene {
+  id: string
+  narrativeText: string
+  rawComment: string
+  status: 'Pendente' | 'Concluído'
+  editorNotes: string
+  assets: Asset[]
+}
 
-  const mockData = [
-    {
-      id: 1,
-      narrated: "CENA 01 - INT. ESCRITÓRIO - DIA",
-      link: "https://example.com/asset1",
-      timestamp: "00:00",
-      status: "pending",
-      notes: "",
-    },
-    {
-      id: 2,
-      narrated: "João entra no escritório",
-      link: "",
-      timestamp: "00:15",
-      status: "completed",
-      notes: "Adicionar música de fundo",
-    },
-    {
-      id: 3,
-      narrated: "Transição para próxima cena",
-      link: "https://example.com/transition",
-      timestamp: "00:45",
-      status: "pending",
-      notes: "Usar efeito fade",
-    },
-  ]
+interface TableViewProps {
+  scenes: Scene[]
+}
+
+export function TableView({ scenes }: TableViewProps) {
+  const [selectedRow, setSelectedRow] = useState<number | null>(null)
+  const [localScenes, setLocalScenes] = useState<Scene[]>(scenes)
+  const updateScene = useDocumentStore((state) => state.updateScene)
+
+  // Função para lidar com mudanças no status
+  const handleStatusChange = (sceneId: string, status: 'Pendente' | 'Concluído') => {
+    setLocalScenes(prev => prev.map(scene => 
+      scene.id === sceneId ? { ...scene, status } : scene
+    ))
+    
+    // Atualizar no store global
+    const scene = scenes.find(s => s.id === sceneId)
+    if (scene) {
+      updateScene(sceneId, { status })
+    }
+  }
+
+  // Função para lidar com mudanças nas notas do editor
+  const handleNotesChange = (sceneId: string, notes: string) => {
+    setLocalScenes(prev => prev.map(scene => 
+      scene.id === sceneId ? { ...scene, editorNotes: notes } : scene
+    ))
+    
+    // Atualizar no store global
+    const scene = scenes.find(s => s.id === sceneId)
+    if (scene) {
+      updateScene(sceneId, { editorNotes: notes })
+    }
+  }
 
   return (
     <>
@@ -51,39 +70,68 @@ export function TableView({ scriptData }: TableViewProps) {
               <thead className="sticky top-0 bg-secondary/80 backdrop-blur">
                 <tr className="border-b border-border">
                   <th className="px-6 py-4 text-left text-sm font-semibold">Trecho Narrado</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold">Comentário Bruto</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold">Tipo de Mídia</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold">Link / Asset</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold">Timestamp</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold">Diretriz/Nota</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold">Notas do Editor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {mockData.map((row, index) => (
-                  <tr key={row.id} className="border-b border-border/50 transition-colors hover:bg-secondary/30">
+                {localScenes.map((scene, index) => (
+                  <tr key={scene.id} className="border-b border-border/50 transition-colors hover:bg-secondary/30">
                     <td className="px-6 py-4">
-                      <p className="max-w-md text-sm leading-relaxed">{row.narrated}</p>
+                      <p className="max-w-md text-sm leading-relaxed">{scene.narrativeText}</p>
                     </td>
                     <td className="px-6 py-4">
-                      {row.link ? (
-                        <a
-                          href={row.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          Ver Asset
-                        </a>
+                      <p className="max-w-md text-sm leading-relaxed">{scene.rawComment}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Select>
+                        <SelectTrigger className="w-32 h-8 text-sm">
+                          <SelectValue placeholder="Tipo de mídia" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="link">Link</SelectItem>
+                          <SelectItem value="image">Imagem</SelectItem>
+                          <SelectItem value="video">Vídeo</SelectItem>
+                          <SelectItem value="audio">Áudio</SelectItem>
+                          <SelectItem value="document">Documento</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-6 py-4">
+                      {scene.assets.length > 0 ? (
+                        scene.assets.map((asset, assetIndex) => (
+                          <a
+                            key={assetIndex}
+                            href={asset.value}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Ver Asset
+                          </a>
+                        ))
                       ) : (
                         <span className="text-sm text-muted-foreground">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <Input type="text" defaultValue={row.timestamp} className="w-24 h-8 text-sm bg-secondary/50" />
+                      <Input type="text" placeholder="00:00" className="w-24 h-8 text-sm bg-secondary/50" />
                     </td>
                     <td className="px-6 py-4">
-                      <Select defaultValue={row.status}>
+                      <span className="text-sm text-muted-foreground">—</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Select 
+                        value={scene.status === 'Concluído' ? 'completed' : 'pending'}
+                        onValueChange={(value) => handleStatusChange(scene.id, value === 'completed' ? 'Concluído' : 'Pendente')}
+                      >
                         <SelectTrigger className="w-32 h-8 text-sm">
                           <SelectValue />
                         </SelectTrigger>
@@ -100,7 +148,8 @@ export function TableView({ scriptData }: TableViewProps) {
                     <td className="px-6 py-4">
                       <Input
                         type="text"
-                        defaultValue={row.notes}
+                        value={scene.editorNotes}
+                        onChange={(e) => handleNotesChange(scene.id, e.target.value)}
                         placeholder="Adicionar nota..."
                         className="max-w-xs h-8 text-sm bg-secondary/50"
                       />
@@ -123,7 +172,7 @@ export function TableView({ scriptData }: TableViewProps) {
         <BreakdownModal
           isOpen={selectedRow !== null}
           onClose={() => setSelectedRow(null)}
-          rowData={mockData[selectedRow]}
+          rowData={localScenes[selectedRow]}
         />
       )}
     </>
