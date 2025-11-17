@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit, ExternalLink } from "lucide-react"
-import { BreakdownModal } from "@/components/breakdown-modal"
+import { BreakdownModal } from "@/components/modal"
 import { useDocumentStore } from '@/lib/stores/documentStore'
 import type { Scene } from '@/lib/stores/documentStore'
 import React from 'react'

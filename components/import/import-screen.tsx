@@ -11,6 +11,34 @@ import { convertCommentsToScenes } from '@/lib/dataProcessor'
 import type { GoogleDocData } from '@/lib/api/getGoogleDoc'
 import type { Scene } from '@/lib/stores/documentStore'
 
+type ImportStep = 'idle' | 'validating' | 'fetching' | 'processing' | 'persisting' | 'done' | 'error'
+type LogStatus = 'pending' | 'in-progress' | 'done' | 'error'
+
+interface ImportLogEntry {
+  id: string
+  label: string
+  status: LogStatus
+  message?: string
+  timestamp: string
+}
+
+const importStepLabels: Record<ImportStep, string> = {
+  idle: "Aguardando ação",
+  validating: "Validando URL",
+  fetching: "Buscando Google Doc",
+  processing: "Processando comentários",
+  persisting: "Persistindo dados",
+  done: "Concluído",
+  error: "Erro",
+}
+
+const logStatusClasses: Record<LogStatus, string> = {
+  pending: "text-muted-foreground",
+  "in-progress": "text-amber-400",
+  done: "text-emerald-500",
+  error: "text-destructive",
+}
+
 // Tipos são importados de lib/api/getGoogleDoc e do store
 
 export function ImportScreen() {
@@ -18,9 +46,39 @@ export function ImportScreen() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [importStep, setImportStep] = useState<ImportStep>('idle')
+  const [logEntries, setLogEntries] = useState<ImportLogEntry[]>([])
   const setDocId = useDocumentStore((state) => state.setDocId)
   const setDocumentData = useDocumentStore((state) => state.setDocumentData)
   const setScenes = useDocumentStore((state) => state.setScenes)
+
+  const addOrUpdateLogEntry = (label: string, status: LogStatus, message?: string) => {
+    setLogEntries((prev) => {
+      const timestamp = new Date().toISOString()
+      const existingIndex = prev.findIndex((entry) => entry.label === label)
+      if (existingIndex >= 0) {
+        const updated = [...prev]
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          status,
+          message: message ?? updated[existingIndex].message,
+          timestamp,
+        }
+        return updated
+      }
+
+      const entry: ImportLogEntry = {
+        id: `${label}-${timestamp}`,
+        label,
+        status,
+        message,
+        timestamp,
+      }
+      return [...prev, entry].slice(-6)
+    })
+  }
+
+  const resetLogEntries = () => setLogEntries([])
 
   // Função para extrair o docId da URL do Google Docs
   const extractDocId = (url: string): string | null => {
@@ -33,49 +91,72 @@ export function ImportScreen() {
   }
 
   const handleImport = async () => {
-    // Resetar mensagens
     setError(null)
     setSuccess(null)
-    
+    resetLogEntries()
+    setImportStep("validating")
+    addOrUpdateLogEntry("Validando URL", "in-progress")
+
     if (!url) {
+      addOrUpdateLogEntry("Validando URL", "error", "Por favor, insira uma URL válida")
+      setImportStep("error")
       setError("Por favor, insira uma URL válida")
       return
     }
 
     const docId = extractDocId(url)
     if (!docId) {
+      addOrUpdateLogEntry(
+        "Validando URL",
+        "error",
+        "URL inválida. Por favor, insira uma URL válida do Google Docs"
+      )
+      setImportStep("error")
       setError("URL inválida. Por favor, insira uma URL válida do Google Docs")
       return
     }
 
+    addOrUpdateLogEntry("Validando URL", "done")
+    setImportStep("fetching")
+    addOrUpdateLogEntry("Buscando Google Doc", "in-progress")
     setIsLoading(true)
-    setDocId(docId)
 
     try {
       const result = await getGoogleDoc(docId)
       if (result.error || !result.data) {
-        setError(result.error || "Nenhum dado retornado da API")
+        const message = result.error || "Nenhum dado retornado da API"
+        addOrUpdateLogEntry("Buscando Google Doc", "error", message)
+        setImportStep("error")
+        setError(message)
         return
       }
 
-      // Processar os dados recebidos
+      addOrUpdateLogEntry("Buscando Google Doc", "done")
+      setImportStep("processing")
+      addOrUpdateLogEntry("Processando comentários", "in-progress")
+
       const documentData: GoogleDocData = result.data
       setDocumentData(documentData)
-      
+
       const scenes: Scene[] = convertCommentsToScenes(documentData.comments)
-      
       setScenes(scenes)
-      
-      // Mostrar mensagem de sucesso
+
+      addOrUpdateLogEntry("Processando comentários", "done")
+      setImportStep("persisting")
+      addOrUpdateLogEntry("Persistindo dados", "in-progress")
+
+      setDocId(docId)
+      addOrUpdateLogEntry("Persistindo dados", "done")
+      addOrUpdateLogEntry("Resultado", "done", "Importação concluída com sucesso")
+      setImportStep("done")
       setSuccess("Documento importado com sucesso!")
-      
-      // Limpar mensagem de sucesso após 3 segundos
       setTimeout(() => {
         setSuccess(null)
       }, 3000)
     } catch (err) {
-      console.error("Erro ao importar documento:", err)
       const message = err instanceof Error ? err.message : "Erro ao importar documento. Por favor, tente novamente."
+      addOrUpdateLogEntry("Buscando Google Doc", "error", message)
+      setImportStep("error")
       setError(message)
     } finally {
       setIsLoading(false)
@@ -150,6 +231,44 @@ export function ImportScreen() {
               <AlertDescription>{success}</AlertDescription>
             </Alert>
           )}
+
+          <div className="rounded-xl border border-border bg-card/60 p-4 text-left">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">Progresso da importação</p>
+              <span className="text-[10px] uppercase text-muted-foreground">
+                {importStepLabels[importStep]}
+              </span>
+            </div>
+            {logEntries.length > 0 ? (
+              <ul className="mt-3 space-y-2 text-sm">
+                {logEntries.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="rounded-md border border-border/60 bg-card/30 px-3 py-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-foreground">{entry.label}</p>
+                      <span
+                        className={`text-[11px] font-semibold ${logStatusClasses[entry.status]}`}
+                      >
+                        {entry.status}
+                      </span>
+                    </div>
+                    {entry.message && (
+                      <p className="mt-1 text-xs text-muted-foreground">{entry.message}</p>
+                    )}
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {new Date(entry.timestamp).toLocaleTimeString()}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Nenhuma etapa registrada ainda.
+              </p>
+            )}
+          </div>
         </div>
         
         <div className="text-sm text-muted-foreground">

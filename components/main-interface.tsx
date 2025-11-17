@@ -3,8 +3,8 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { FileText, Table, Download, Plus, Sun, Moon } from "lucide-react"
-import { ScriptView } from "@/components/script-view"
-import { TableView } from "@/components/table-view"
+import { ScriptView } from "@/components/script"
+import { TableView } from "@/components/table"
 import { useDocumentStore } from '@/lib/stores/documentStore'
 import { useTheme } from 'next-themes'
 
