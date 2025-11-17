@@ -8,23 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Edit, ExternalLink } from "lucide-react"
 import { BreakdownModal } from "@/components/breakdown-modal"
 import { useDocumentStore } from '@/lib/stores/documentStore'
+import type { Scene } from '@/lib/stores/documentStore'
+import React from 'react'
+import { decodeHtmlEntities } from '@/lib/dataProcessor'
 
-// Interfaces para tipagem TypeScript
-interface Asset {
-  id: string
-  type: string
-  value: string
-  source?: string
-}
-
-interface Scene {
-  id: string
-  narrativeText: string
-  rawComment: string
-  status: 'Pendente' | 'Concluído'
-  editorNotes: string
-  assets: Asset[]
-}
+// Tipos provenientes do store
 
 interface TableViewProps {
   scenes: Scene[]
@@ -32,16 +20,10 @@ interface TableViewProps {
 
 export function TableView({ scenes }: TableViewProps) {
   const [selectedRow, setSelectedRow] = useState<number | null>(null)
-  const [localScenes, setLocalScenes] = useState<Scene[]>(scenes)
   const updateScene = useDocumentStore((state) => state.updateScene)
 
   // Função para lidar com mudanças no status
   const handleStatusChange = (sceneId: string, status: 'Pendente' | 'Concluído') => {
-    setLocalScenes(prev => prev.map(scene => 
-      scene.id === sceneId ? { ...scene, status } : scene
-    ))
-    
-    // Atualizar no store global
     const scene = scenes.find(s => s.id === sceneId)
     if (scene) {
       updateScene(sceneId, { status })
@@ -50,11 +32,6 @@ export function TableView({ scenes }: TableViewProps) {
 
   // Função para lidar com mudanças nas notas do editor
   const handleNotesChange = (sceneId: string, notes: string) => {
-    setLocalScenes(prev => prev.map(scene => 
-      scene.id === sceneId ? { ...scene, editorNotes: notes } : scene
-    ))
-    
-    // Atualizar no store global
     const scene = scenes.find(s => s.id === sceneId)
     if (scene) {
       updateScene(sceneId, { editorNotes: notes })
@@ -81,13 +58,13 @@ export function TableView({ scenes }: TableViewProps) {
                 </tr>
               </thead>
               <tbody>
-                {localScenes.map((scene, index) => (
+                {scenes.map((scene, index) => (
                   <tr key={scene.id} className="border-b border-border/50 transition-colors hover:bg-secondary/30">
                     <td className="px-6 py-4">
-                      <p className="max-w-md text-sm leading-relaxed">{scene.narrativeText}</p>
+                      <p className="max-w-md text-sm leading-relaxed">{decodeHtmlEntities(scene.narrativeText)}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="max-w-md text-sm leading-relaxed">{scene.rawComment}</p>
+                      <p className="max-w-md text-sm leading-relaxed">{decodeHtmlEntities(scene.rawComment)}</p>
                     </td>
                     <td className="px-6 py-4">
                       <Select>
@@ -155,7 +132,7 @@ export function TableView({ scenes }: TableViewProps) {
                       />
                     </td>
                     <td className="px-6 py-4">
-                      <Button size="sm" onClick={() => setSelectedRow(index)} className="btn-glossy h-8">
+                      <Button size="sm" onClick={() => setSelectedRow(index)} className="h-8" aria-label={`Decupar ${scene.id}`}>
                         <Edit className="mr-2 h-3 w-3" />
                         Decupar
                       </Button>
@@ -172,7 +149,7 @@ export function TableView({ scenes }: TableViewProps) {
         <BreakdownModal
           isOpen={selectedRow !== null}
           onClose={() => setSelectedRow(null)}
-          rowData={localScenes[selectedRow]}
+          rowData={selectedRow !== null ? scenes[selectedRow] : undefined}
         />
       )}
     </>

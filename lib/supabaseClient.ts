@@ -1,13 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Obter as variáveis de ambiente
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+let client: ReturnType<typeof createClient> | null = null
 
-// Validar que as variáveis de ambiente estão definidas
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+export function getSupabase() {
+  if (client) return client
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null
+  }
+
+  client = createClient(supabaseUrl, supabaseAnonKey)
+  return client
 }
-
-// Criar o cliente Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)

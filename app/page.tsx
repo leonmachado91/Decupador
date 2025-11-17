@@ -1,30 +1,19 @@
 "use client"
 
-import { useState } from "react"
 import { ImportScreen } from "@/components/import-screen"
 import { MainInterface } from "@/components/main-interface"
+import { useDocumentStore } from "@/lib/stores/documentStore"
 
 export default function Home() {
-  const [isImported, setIsImported] = useState(false)
-  const [scriptData, setScriptData] = useState<any>(null)
+  const docId = useDocumentStore((s) => s.docId)
+  const scenes = useDocumentStore((s) => s.scenes)
+  const documentData = useDocumentStore((s) => s.documentData)
 
-  const handleImport = (data: any) => {
-    setScriptData(data)
-    setIsImported(true)
-  }
-
-  const handleNewScript = () => {
-    setIsImported(false)
-    setScriptData(null)
-  }
+  const hasDocument = !!docId || !!documentData || scenes.length > 0
 
   return (
     <div className="min-h-screen bg-background">
-      {!isImported ? (
-        <ImportScreen onImport={handleImport} />
-      ) : (
-        <MainInterface onNewScript={handleNewScript} />
-      )}
+      {!hasDocument ? <ImportScreen /> : <MainInterface />}
     </div>
   )
 }

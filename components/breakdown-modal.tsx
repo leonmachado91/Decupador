@@ -5,26 +5,40 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Link, Clock, FileText, Tag } from "lucide-react"
+import { useDocumentStore } from '@/lib/stores/documentStore'
+import type { Scene } from '@/lib/stores/documentStore'
 
 interface BreakdownModalProps {
   isOpen: boolean
   onClose: () => void
-  rowData: any
+  rowData?: Scene
 }
 
 export function BreakdownModal({ isOpen, onClose, rowData }: BreakdownModalProps) {
   const [selectedText, setSelectedText] = useState("")
   const [processedParts, setProcessedParts] = useState<string[]>([])
+  const updateScene = useDocumentStore((s) => s.updateScene)
+  const addAssetToScene = useDocumentStore((s) => s.addAssetToScene)
 
-  const rawComment =
-    "CENA 01 - INT. ESCRITÓRIO - DIA\n\nAdicionar música de fundo: 'Ambient Corporate'\nLink do asset: https://example.com/music\nTimestamp: 00:15\nNota: Usar volume baixo para não sobrepor diálogo"
+  const rawComment: string = rowData?.rawComment || "Comentário não disponível"
 
   const handleCategorize = (category: string) => {
-    if (selectedText) {
-      setProcessedParts([...processedParts, selectedText])
-      console.log(`Categorized "${selectedText}" as ${category}`)
-      setSelectedText("")
+    if (!selectedText) return
+    const sceneId = rowData?.id
+    if (!sceneId) return
+
+    if (category === 'link') {
+      addAssetToScene(sceneId, { id: crypto.randomUUID(), type: 'link', value: selectedText })
+    } else if (category === 'timestamp') {
+      addAssetToScene(sceneId, { id: crypto.randomUUID(), type: 'timestamp', value: selectedText })
+    } else if (category === 'narrated') {
+      updateScene(sceneId, { narrativeText: `${rowData.narrativeText}\n${selectedText}` })
+    } else if (category === 'notes') {
+      updateScene(sceneId, { editorNotes: `${rowData.editorNotes || ''}\n${selectedText}` })
     }
+
+    setProcessedParts([...processedParts, selectedText])
+    setSelectedText("")
   }
 
   return (
@@ -66,7 +80,7 @@ export function BreakdownModal({ isOpen, onClose, rowData }: BreakdownModalProps
               <Button
                 onClick={() => handleCategorize("link")}
                 disabled={!selectedText}
-                className="btn-glossy justify-start h-auto py-4"
+                className="justify-start h-auto py-4"
                 variant="outline"
               >
                 <Link className="mr-3 h-5 w-5 text-chart-2" />
@@ -79,7 +93,7 @@ export function BreakdownModal({ isOpen, onClose, rowData }: BreakdownModalProps
               <Button
                 onClick={() => handleCategorize("timestamp")}
                 disabled={!selectedText}
-                className="btn-glossy justify-start h-auto py-4"
+                className="justify-start h-auto py-4"
                 variant="outline"
               >
                 <Clock className="mr-3 h-5 w-5 text-chart-1" />
@@ -92,7 +106,7 @@ export function BreakdownModal({ isOpen, onClose, rowData }: BreakdownModalProps
               <Button
                 onClick={() => handleCategorize("narrated")}
                 disabled={!selectedText}
-                className="btn-glossy justify-start h-auto py-4"
+                className="justify-start h-auto py-4"
                 variant="outline"
               >
                 <FileText className="mr-3 h-5 w-5 text-chart-3" />
@@ -105,7 +119,7 @@ export function BreakdownModal({ isOpen, onClose, rowData }: BreakdownModalProps
               <Button
                 onClick={() => handleCategorize("notes")}
                 disabled={!selectedText}
-                className="btn-glossy justify-start h-auto py-4"
+                className="justify-start h-auto py-4"
                 variant="outline"
               >
                 <Tag className="mr-3 h-5 w-5 text-chart-4" />
@@ -142,7 +156,7 @@ export function BreakdownModal({ isOpen, onClose, rowData }: BreakdownModalProps
           <Button variant="outline" onClick={onClose}>
             Fechar
           </Button>
-          <Button onClick={onClose} className="btn-glossy">
+          <Button onClick={onClose}>
             Salvar Progresso
           </Button>
         </div>

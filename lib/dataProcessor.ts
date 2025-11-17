@@ -1,6 +1,7 @@
 // Funções para processar os dados recebidos da Edge Function do Google Docs
 
 import { Scene, Asset } from '@/lib/stores/documentStore'
+import type { GoogleDocComment, GoogleDocData, GoogleDocBody } from '@/lib/api/getGoogleDoc'
 
 /**
  * Extrai o ID do documento de uma URL do Google Docs
@@ -11,7 +12,7 @@ export const extractDocId = (url: string): string | null => {
   try {
     const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
     return match ? match[1] : null
-  } catch (error) {
+  } catch {
     return null
   }
 }
@@ -21,17 +22,17 @@ export const extractDocId = (url: string): string | null => {
  * @param comments Objeto contendo os comentários da API
  * @returns Array de cenas
  */
-export const convertCommentsToScenes = (comments: any): Scene[] => {
+export const convertCommentsToScenes = (comments: Record<string, GoogleDocComment> | undefined): Scene[] => {
   if (!comments) return []
   
-  return Object.values(comments).map((comment: any, index) => {
+  return Object.values(comments).map((comment, index) => {
     // Gerar um ID único para a cena
     const sceneId = `scene-${Date.now()}-${index}`
     
     return {
       id: sceneId,
-      narrativeText: comment.quotedFileContent?.value || "",
-      rawComment: comment.content || "",
+      narrativeText: decodeHtmlEntities(comment.quotedFileContent?.value || ""),
+      rawComment: decodeHtmlEntities(comment.content || ""),
       status: "Pendente",
       editorNotes: "",
       assets: []
@@ -87,7 +88,7 @@ export const createSceneWithAsset = (scene: Scene, asset: Asset): Scene => {
  * @param rawData Dados brutos recebidos da Edge Function
  * @returns Dados processados
  */
-export const processDocumentData = (rawData: any) => {
+export const processDocumentData = (rawData: GoogleDocData | null) => {
   if (!rawData) return null
 
   const processedData = {
@@ -103,13 +104,13 @@ export const processDocumentData = (rawData: any) => {
  * @param content Conteúdo do documento
  * @returns Texto formatado como string
  */
-export const extractFormattedText = (content: any): string => {
+export const extractFormattedText = (content: GoogleDocBody): string => {
   if (!content || !content.content) return ""
   
   let text = ""
-  content.content.forEach((element: any) => {
+  content.content.forEach((element) => {
     if (element.paragraph) {
-      element.paragraph.elements?.forEach((el: any) => {
+      element.paragraph.elements?.forEach((el) => {
         if (el.textRun) {
           text += el.textRun.content || ""
         }
@@ -118,5 +119,30 @@ export const extractFormattedText = (content: any): string => {
     }
   })
   
-  return text
+  return decodeHtmlEntities(text)
+}
+
+export const decodeHtmlEntities = (input: string): string => {
+  if (!input) return ""
+  const named: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: "\u00A0",
+  }
+  return input.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (_, entity: string) => {
+    if (entity[0] === '#') {
+      const isHex = entity[1] === 'x' || entity[1] === 'X'
+      const code = isHex ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10)
+      if (Number.isNaN(code)) return `&${entity};`
+      try {
+        return String.fromCodePoint(code)
+      } catch {
+        return `&${entity};`
+      }
+    }
+    return named[entity] ?? `&${entity};`
+  })
 }

@@ -3,24 +3,8 @@
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MessageSquare } from "lucide-react"
-
-// Interfaces para tipagem TypeScript
-interface Scene {
-  id: string
-  narrativeText: string
-  rawComment: string
-  status: 'Pendente' | 'Concluído'
-  editorNotes: string
-  assets: any[]
-}
-
-interface GoogleDocData {
-  title: string
-  body: any
-  comments: Record<string, any>
-  documentId: string
-  revisionId: string
-}
+import type { Scene, GoogleDocData } from '@/lib/stores/documentStore'
+import { extractFormattedText, decodeHtmlEntities } from '@/lib/dataProcessor'
 
 interface ScriptViewProps {
   documentData: GoogleDocData | null
@@ -28,28 +12,10 @@ interface ScriptViewProps {
 }
 
 export function ScriptView({ documentData, scenes }: ScriptViewProps) {
-  // Função para extrair texto formatado do corpo do documento
-  const extractFormattedText = (content: any): string => {
-    if (!content || !content.content) return ""
-    
-    let text = ""
-    content.content.forEach((element: any) => {
-      if (element.paragraph) {
-        element.paragraph.elements?.forEach((el: any) => {
-          if (el.textRun) {
-            text += el.textRun.content || ""
-          }
-        })
-        text += "\n"
-      }
-    })
-    
-    return text
-  }
 
   // Função para renderizar o conteúdo do documento
   const renderDocumentContent = () => {
-    if (!documentData?.body) return <p>Conteúdo não disponível</p>
+    if (!documentData?.body) return <p role="status">Conteúdo não disponível</p>
     
     // Extrair e formatar o texto do documento
     const documentText = extractFormattedText(documentData.body)
@@ -58,7 +24,7 @@ export function ScriptView({ documentData, scenes }: ScriptViewProps) {
     const paragraphs = documentText.split('\n').filter(p => p.trim() !== '')
     
     return (
-      <div className="prose prose-invert max-w-none space-y-4">
+      <div className="max-w-none space-y-4">
         {paragraphs.map((paragraph, index) => (
           <p key={index} className="text-base leading-relaxed text-foreground/90">
             {paragraph}
@@ -102,7 +68,7 @@ export function ScriptView({ documentData, scenes }: ScriptViewProps) {
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-relaxed">{scene.rawComment}</p>
+                  <p className="text-sm font-medium leading-relaxed">{decodeHtmlEntities(scene.rawComment)}</p>
                   <Badge
                     variant={scene.status === "Concluído" ? "default" : "secondary"}
                     className={scene.status === "Concluído" ? "bg-chart-1" : ""}

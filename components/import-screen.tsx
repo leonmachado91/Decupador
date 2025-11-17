@@ -4,66 +4,16 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FileText, Loader2, AlertCircle, CheckCircle } from "lucide-react"
-import { supabase } from '@/lib/supabaseClient'
 import { useDocumentStore } from '@/lib/stores/documentStore'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { getGoogleDoc } from '@/lib/api/getGoogleDoc'
+import { convertCommentsToScenes } from '@/lib/dataProcessor'
+import type { GoogleDocData } from '@/lib/api/getGoogleDoc'
+import type { Scene } from '@/lib/stores/documentStore'
 
-// Interfaces para tipagem TypeScript
-interface GoogleDocComment {
-  id: string
-  author: {
-    displayName: string
-    photoLink: string
-    kind: string
-  }
-  content: string
-  createdTime: string
-  modifiedTime: string
-  resolved: boolean
-  quotedFileContent?: {
-    value: string
-    mimeType: string
-  }
-  replies: Array<{
-    id: string
-    author: {
-      displayName: string
-      photoLink: string
-      kind: string
-    }
-    content: string
-    createdTime: string
-    modifiedTime: string
-  }>
-}
+// Tipos são importados de lib/api/getGoogleDoc e do store
 
-interface GoogleDocData {
-  title: string
-  body: any
-  comments: Record<string, GoogleDocComment>
-  documentId: string
-  revisionId: string
-}
-
-interface Scene {
-  id: string
-  narrativeText: string
-  rawComment: string
-  status: 'Pendente' | 'Concluído'
-  editorNotes: string
-  assets: any[]
-}
-
-interface ImportScreenProps {
-  onImport: (data: { 
-    title: string, 
-    content: any, 
-    comments: Record<string, GoogleDocComment>,
-    scenes: Scene[]
-  }) => void
-}
-
-export function ImportScreen({ onImport }: ImportScreenProps) {
+export function ImportScreen() {
   const [url, setUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -77,7 +27,7 @@ export function ImportScreen({ onImport }: ImportScreenProps) {
     try {
       const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
       return match ? match[1] : null
-    } catch (error) {
+    } catch {
       return null
     }
   }
@@ -102,56 +52,19 @@ export function ImportScreen({ onImport }: ImportScreenProps) {
     setDocId(docId)
 
     try {
-      // Chamar a Edge Function do Supabase
-      const response = await supabase.functions.invoke('get-google-doc', {
-        body: { docId }
-      })
-
-      if (response.error) {
-        console.error("Erro da Edge Function:", response.error)
-        
-        // Tratamento de erros específicos
-        if (response.error.message.includes("Document ID")) {
-          setError("ID do documento inválido. Verifique se a URL está correta.")
-        } else if (response.error.message.includes("access")) {
-          setError("Acesso negado ao documento. Certifique-se de que o documento é público ou compartilhado com a conta de serviço.")
-        } else if (response.error.message.includes("not found")) {
-          setError("Documento não encontrado. Verifique se a URL está correta.")
-        } else {
-          setError(`Erro ao acessar o documento: ${response.error.message}`)
-        }
-        return
-      }
-
-      if (!response.data) {
-        setError("Nenhum dado retornado da API")
+      const result = await getGoogleDoc(docId)
+      if (result.error || !result.data) {
+        setError(result.error || "Nenhum dado retornado da API")
         return
       }
 
       // Processar os dados recebidos
-      const documentData: GoogleDocData = response.data
+      const documentData: GoogleDocData = result.data
       setDocumentData(documentData)
       
-      // Criar cenas a partir dos comentários
-      const comments = documentData.comments || {}
-      const scenes: Scene[] = Object.values(comments).map((comment: GoogleDocComment, index) => ({
-        id: `scene-${index + 1}`,
-        narrativeText: comment.quotedFileContent?.value || "",
-        rawComment: comment.content || "",
-        status: "Pendente",
-        editorNotes: "",
-        assets: []
-      }))
+      const scenes: Scene[] = convertCommentsToScenes(documentData.comments)
       
       setScenes(scenes)
-      
-      // Passar os dados para o componente principal
-      onImport({
-        title: documentData.title,
-        content: documentData.body,
-        comments: documentData.comments,
-        scenes
-      })
       
       // Mostrar mensagem de sucesso
       setSuccess("Documento importado com sucesso!")
@@ -160,9 +73,10 @@ export function ImportScreen({ onImport }: ImportScreenProps) {
       setTimeout(() => {
         setSuccess(null)
       }, 3000)
-    } catch (err: any) {
+    } catch (err) {
       console.error("Erro ao importar documento:", err)
-      setError(err.message || "Erro ao importar documento. Por favor, tente novamente.")
+      const message = err instanceof Error ? err.message : "Erro ao importar documento. Por favor, tente novamente."
+      setError(message)
     } finally {
       setIsLoading(false)
     }
@@ -200,7 +114,7 @@ export function ImportScreen({ onImport }: ImportScreenProps) {
             <Button
               onClick={handleImport}
               disabled={!url || isLoading}
-              className="btn-glossy h-12 px-8 text-base font-semibold"
+              className="h-12 px-8 text-base font-semibold"
               size="lg"
             >
               {isLoading ? (

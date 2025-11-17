@@ -2,44 +2,20 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { FileText, Table, Download, Plus } from "lucide-react"
+import { FileText, Table, Download, Plus, Sun, Moon } from "lucide-react"
 import { ScriptView } from "@/components/script-view"
 import { TableView } from "@/components/table-view"
 import { useDocumentStore } from '@/lib/stores/documentStore'
+import { useTheme } from 'next-themes'
 
-// Interfaces para tipagem TypeScript
-interface Asset {
-  id: string
-  type: string
-  value: string
-  source?: string
-}
+// Tipos são fornecidos pelo store (Asset, Scene, GoogleDocData)
 
-interface Scene {
-  id: string
-  narrativeText: string
-  rawComment: string
-  status: 'Pendente' | 'Concluído'
-  editorNotes: string
-  assets: Asset[]
-}
-
-interface GoogleDocData {
-  title: string
-  body: any
-  comments: Record<string, any>
-  documentId: string
-  revisionId: string
-}
-
-interface MainInterfaceProps {
-  onNewScript: () => void
-}
-
-export function MainInterface({ onNewScript }: MainInterfaceProps) {
+export function MainInterface() {
   const [activeView, setActiveView] = useState<"script" | "table">("script")
   const documentData = useDocumentStore((state) => state.documentData)
   const scenes = useDocumentStore((state) => state.scenes)
+  const clearDocumentData = useDocumentStore((state) => state.clearDocumentData)
+  const { theme, setTheme } = useTheme()
 
   const handleExport = () => {
     // Export logic
@@ -65,7 +41,6 @@ export function MainInterface({ onNewScript }: MainInterfaceProps) {
                 variant={activeView === "script" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setActiveView("script")}
-                className={activeView === "script" ? "btn-glossy" : ""}
               >
                 <FileText className="mr-2 h-4 w-4" />
                 Visão Roteiro
@@ -74,7 +49,6 @@ export function MainInterface({ onNewScript }: MainInterfaceProps) {
                 variant={activeView === "table" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setActiveView("table")}
-                className={activeView === "table" ? "btn-glossy" : ""}
               >
                 <Table className="mr-2 h-4 w-4" />
                 Visão Tabela
@@ -85,6 +59,14 @@ export function MainInterface({ onNewScript }: MainInterfaceProps) {
           {/* Actions */}
           <div className="flex items-center gap-3">
             <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Alternar tema"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button
               variant="outline"
               onClick={handleExport}
               className="border-primary/30 hover:bg-primary/10 bg-transparent"
@@ -94,7 +76,7 @@ export function MainInterface({ onNewScript }: MainInterfaceProps) {
             </Button>
             <Button
               variant="outline"
-              onClick={onNewScript}
+              onClick={() => clearDocumentData()}
               className="border-primary/30 hover:bg-primary/10 bg-transparent"
             >
               <Plus className="mr-2 h-4 w-4" />

@@ -18,12 +18,20 @@ export interface Scene {
   assets: Asset[]
 }
 
+export interface GoogleDocData {
+  title: string
+  body: import('../api/getGoogleDoc').GoogleDocBody
+  comments: Record<string, import('../api/getGoogleDoc').GoogleDocComment>
+  documentId: string
+  revisionId: string
+}
+
 interface DocumentState {
   docId: string | null
-  documentData: any | null
+  documentData: GoogleDocData | null
   scenes: Scene[]
   setDocId: (docId: string) => void
-  setDocumentData: (data: any) => void
+  setDocumentData: (data: GoogleDocData) => void
   setScenes: (scenes: Scene[]) => void
   clearDocumentData: () => void
   updateScene: (id: string, scene: Partial<Scene>) => void
@@ -33,7 +41,7 @@ interface DocumentState {
 // Criar o store com persistência no localStorage
 export const useDocumentStore = create<DocumentState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       docId: null,
       documentData: null,
       scenes: [],
