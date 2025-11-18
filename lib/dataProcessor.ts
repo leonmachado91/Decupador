@@ -143,6 +143,37 @@ export const decodeHtmlEntities = (input: string): string => {
         return `&${entity};`
       }
     }
-    return named[entity] ?? `&${entity};`
-  })
-}
+        return named[entity] ?? `&${entity};`
+      })
+    }
+    
+    /**
+     * Extrai links do YouTube de uma string de texto e os copia para a área de transferência.
+     * @param content O texto do qual extrair os links.
+     * @returns Uma promessa que resolve para `true` se os links foram copiados, `false` caso contrário.
+     */
+    export const extractAndCopyYouTubeLinks = async (content: string): Promise<boolean> => {
+      if (!content) return false;
+    
+      // Regex para encontrar links do YouTube (padrões watch, embed, shorts e youtu.be)
+      const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/g;
+      
+      const matches = content.match(youtubeRegex);
+    
+      if (!matches || matches.length === 0) {
+        return false; // Nenhum link encontrado
+      }
+    
+      // Remove duplicatas e junta os links com uma nova linha
+      const uniqueLinks = [...new Set(matches)];
+      const linksText = uniqueLinks.join('\n');
+    
+      try {
+        await navigator.clipboard.writeText(linksText);
+        return true; // Copiado com sucesso
+      } catch (err) {
+        console.error('Falha ao copiar links para a área de transferência:', err);
+        return false; // Falha ao copiar
+      }
+    };
+    

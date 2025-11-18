@@ -10,13 +10,8 @@ import { BreakdownModal } from "@/components/modal"
 import { useDocumentStore } from '@/lib/stores/documentStore'
 import type { Scene } from '@/lib/stores/documentStore'
 import React from 'react'
+import { linkify } from "@/lib/linkUtils"
 import { decodeHtmlEntities } from '@/lib/dataProcessor'
-
-// Tipos provenientes do store
-
-interface TableViewProps {
-  scenes: Scene[]
-}
 
 export function TableView({ scenes }: TableViewProps) {
   const [selectedRow, setSelectedRow] = useState<number | null>(null)
@@ -61,10 +56,10 @@ export function TableView({ scenes }: TableViewProps) {
                 {scenes.map((scene, index) => (
                   <tr key={scene.id} className="border-b border-border/50 transition-colors hover:bg-secondary/30">
                     <td className="px-6 py-4">
-                      <p className="max-w-md text-sm leading-relaxed">{decodeHtmlEntities(scene.narrativeText)}</p>
+                      <p className="max-w-md text-sm leading-relaxed">{linkify(decodeHtmlEntities(scene.narrativeText))}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="max-w-md text-sm leading-relaxed">{decodeHtmlEntities(scene.rawComment)}</p>
+                      <p className="max-w-md text-sm leading-relaxed comment-text-overflow">{linkify(decodeHtmlEntities(scene.rawComment))}</p>
                     </td>
                     <td className="px-6 py-4">
                       <Select>

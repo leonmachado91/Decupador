@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MessageSquare } from "lucide-react"
+import { linkify } from "@/lib/linkUtils"
 import type { Scene, GoogleDocData } from '@/lib/stores/documentStore'
 import { extractFormattedText, decodeHtmlEntities } from '@/lib/dataProcessor'
 
@@ -68,7 +69,7 @@ export function ScriptView({ documentData, scenes }: ScriptViewProps) {
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-relaxed">{decodeHtmlEntities(scene.rawComment)}</p>
+                  <p className="text-sm font-medium leading-relaxed comment-text-overflow">{decodeHtmlEntities(scene.rawComment)}</p>
                   <Badge
                     variant={scene.status === "Concluído" ? "default" : "secondary"}
                     className={scene.status === "Concluído" ? "bg-chart-1" : ""}

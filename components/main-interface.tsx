@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { FileText, Table, Download, Plus, Sun, Moon } from "lucide-react"
+import { FileText, Table, Download, Plus, Sun, Moon, Copy } from "lucide-react"
 import { ScriptView } from "@/components/script"
 import { TableView } from "@/components/table"
 import { useDocumentStore } from '@/lib/stores/documentStore'
 import { useTheme } from 'next-themes'
+import { useToast } from "@/hooks/use-toast"
 
 // Tipos são fornecidos pelo store (Asset, Scene, GoogleDocData)
 
@@ -16,10 +17,39 @@ export function MainInterface() {
   const scenes = useDocumentStore((state) => state.scenes)
   const clearDocumentData = useDocumentStore((state) => state.clearDocumentData)
   const { theme, setTheme } = useTheme()
+  const { toast } = useToast()
 
   const handleExport = () => {
     // Export logic
     console.log("Exporting to CSV...")
+  }
+
+  const handleCopyYouTubeLinks = () => {
+    const youtubeRegex = /(https?:\/\/(?:www\.)?youtube\.com\/watch\?v=[\w-]+|https?:\/\/youtu\.be\/[\w-]+)/g
+    let allLinks: string[] = []
+
+    scenes.forEach(scene => {
+      if (scene.rawComment) {
+        const links = scene.rawComment.match(youtubeRegex)
+        if (links) {
+          allLinks = [...allLinks, ...links]
+        }
+      }
+    })
+
+    if (allLinks.length > 0) {
+      const uniqueLinks = [...new Set(allLinks)]
+      navigator.clipboard.writeText(uniqueLinks.join("\n"))
+      toast({
+        title: "Sucesso!",
+        description: `${uniqueLinks.length} link(s) do YouTube foram copiados para a área de transferência.`,
+      })
+    } else {
+      toast({
+        title: "Nenhum link encontrado",
+        description: "Não foram encontrados links do YouTube nos comentários.",
+      })
+    }
   }
 
   return (
@@ -73,6 +103,14 @@ export function MainInterface() {
             >
               <Download className="mr-2 h-4 w-4" />
               Exportar CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCopyYouTubeLinks}
+              className="border-primary/30 hover:bg-primary/10 bg-transparent"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copiar Links
             </Button>
             <Button
               variant="outline"

@@ -154,3 +154,15 @@
     transform: translateY(-1px);
   }
 }
+
+/* Estilos para controle de overflow nos comentários */
+@layer utilities {
+  .comment-text-overflow {
+    max-height: 120px; /* Altura máxima antes de mostrar a rolagem */
+    overflow-y: auto; /* Barra de rolagem vertical apenas se necessário */
+    overflow-wrap: break-word; /* Quebra palavras e links longos */
+    word-break: break-word; /* Garante a quebra em mais cenários */
+    padding-right: 8px; /* Espaço para a barra de rolagem não colar no texto */
+    scrollbar-width: thin; /* Deixa a barra de rolagem mais fina em navegadores como Firefox */
+  }
+}
