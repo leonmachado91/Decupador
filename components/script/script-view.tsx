@@ -6,13 +6,21 @@ import { MessageSquare } from "lucide-react"
 import { linkify } from "@/lib/linkUtils"
 import type { Scene, GoogleDocData } from '@/lib/stores/documentStore'
 import { extractFormattedText, decodeHtmlEntities } from '@/lib/dataProcessor'
+import { useDocumentStore } from '@/lib/stores/documentStore'
+import { sortScenes } from '@/lib/sortUtils'
+import React from 'react'
 
 interface ScriptViewProps {
   documentData: GoogleDocData | null
   scenes: Scene[]
 }
 
-export function ScriptView({ documentData, scenes }: ScriptViewProps) {
+export function ScriptView({ documentData, scenes: initialScenes }: ScriptViewProps) {
+  const sortCriteria = useDocumentStore((state) => state.sortCriteria)
+
+  const scenes = React.useMemo(() => {
+    return sortScenes(initialScenes, sortCriteria)
+  }, [initialScenes, sortCriteria])
 
   // Função para renderizar o conteúdo do documento
   const renderDocumentContent = () => {

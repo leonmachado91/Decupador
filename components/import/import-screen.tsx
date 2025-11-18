@@ -138,7 +138,7 @@ export function ImportScreen() {
       const documentData: GoogleDocData = result.data
       setDocumentData(documentData)
 
-      const scenes: Scene[] = convertCommentsToScenes(documentData.comments)
+      const scenes: Scene[] = convertCommentsToScenes(documentData.comments, documentData.body)
       setScenes(scenes)
 
       addOrUpdateLogEntry("Processando comentários", "done")

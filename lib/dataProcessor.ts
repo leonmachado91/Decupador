@@ -18,19 +18,41 @@ export const extractDocId = (url: string): string | null => {
 }
 
 /**
- * Converte os comentários recebidos da API em cenas
- * @param comments Objeto contendo os comentários da API
- * @returns Array de cenas
+ * Converte os comentários recebidos da API em cenas, ordenando-os pela sua posição no documento.
+ * @param comments Objeto contendo os comentários da API.
+ * @param body O corpo do documento do Google Docs.
+ * @returns Array de cenas ordenadas.
  */
-export const convertCommentsToScenes = (comments: Record<string, GoogleDocComment> | undefined): Scene[] => {
-  if (!comments) return []
+export const convertCommentsToScenes = (
+  comments: Record<string, GoogleDocComment> | undefined,
+  body: GoogleDocBody | undefined
+): Scene[] => {
+  if (!comments || !body) return []
+
+  const documentText = extractFormattedText(body)
+  if (!documentText) return []
+
+  // Ordena os comentários com base na posição do seu texto citado no documento.
+  const sortedComments = Object.values(comments).sort((a, b) => {
+    const aText = decodeHtmlEntities(a.quotedFileContent?.value || '')
+    const bText = decodeHtmlEntities(b.quotedFileContent?.value || '')
+    
+    const aIndex = documentText.indexOf(aText)
+    const bIndex = documentText.indexOf(bText)
+
+    // Comentários cujo texto não é encontrado são colocados no final.
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+
+    return aIndex - bIndex
+  })
   
-  return Object.values(comments).map((comment, index) => {
-    // Gerar um ID único para a cena
+  return sortedComments.map((comment, index) => {
     const sceneId = `scene-${Date.now()}-${index}`
     
     return {
       id: sceneId,
+      position: index,
       narrativeText: decodeHtmlEntities(comment.quotedFileContent?.value || ""),
       rawComment: decodeHtmlEntities(comment.content || ""),
       status: "Pendente",
@@ -93,7 +115,7 @@ export const processDocumentData = (rawData: GoogleDocData | null) => {
 
   const processedData = {
     ...rawData,
-    scenes: convertCommentsToScenes(rawData.comments)
+    scenes: convertCommentsToScenes(rawData.comments, rawData.body)
   }
 
   return processedData

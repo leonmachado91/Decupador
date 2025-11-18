@@ -8,6 +8,7 @@ import { TableView } from "@/components/table"
 import { useDocumentStore } from '@/lib/stores/documentStore'
 import { useTheme } from 'next-themes'
 import { useToast } from "@/hooks/use-toast"
+import { exportToCsv } from "@/lib/csvUtils"
 
 // Tipos são fornecidos pelo store (Asset, Scene, GoogleDocData)
 
@@ -20,8 +21,27 @@ export function MainInterface() {
   const { toast } = useToast()
 
   const handleExport = () => {
-    // Export logic
-    console.log("Exporting to CSV...")
+    if (scenes && scenes.length > 0) {
+      const success = exportToCsv(scenes, 'decupagem.csv');
+      if (success) {
+        toast({
+          title: "Exportação Concluída",
+          description: "O arquivo 'decupagem.csv' foi baixado.",
+        });
+      } else {
+        toast({
+          title: "Erro na Exportação",
+          description: "Não foi possível exportar os dados para CSV.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "Nada para Exportar",
+        description: "Não há dados na tabela para serem exportados.",
+        variant: "destructive",
+      });
+    }
   }
 
   const handleCopyYouTubeLinks = () => {

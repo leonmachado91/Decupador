@@ -1,49 +1,38 @@
-# Proposta da Fase 2 — Revisão Profissional da UI e Estrutura
+# Proposta: Encurtamento de Links na Exibição
 
-## Contexto
-Com o fluxo de importação estabilizado (Fase 1), a próxima iteração deve elevar o projeto a um padrão mais profissional: garantir consistência visual, organizar os componentes por domínio e formalizar tokens e diretrizes para a equipe seguir.
+## 1. Visão Geral
 
-## Objetivos principais
-- Entregar uma base visual uniforme (cores, espaçamentos, tipografia e semântica) que possa ser validada pelos stakeholders.
-- Reorganizar a estrutura de componentes para refletir domínios claros (importação, roteiros, tabela, modais) e favorecer exports nomeados reutilizáveis.
-- Criar um tema global com variáveis CSS e expandir o uso dos primitives em `components/ui`, garantindo que o `MainInterface` respire o mesmo sistema visual.
-- Documentar as boas práticas do design system em um arquivo dedicado (`spec/ui-guidelines.md`) para que novos componentes sigam o padrão.
+O objetivo desta proposta é melhorar a legibilidade da interface, especificamente nos campos que exibem comentários e podem conter URLs longas. Em vez de mostrar a URL completa, exibiremos uma versão abreviada que mantém as partes mais identificáveis do link (o domínio e o nome do arquivo).
 
-## Estratégia de execução
+**Exemplo:**
+-   **URL Atual:** `https://upload.wikimedia.org/wikipedia/commons/f/fe/Engenho_de_acucar_1816.jpg`
+-   **Exibição Proposta:** `wikimedia.org...Engenho_de_acucar_1816.jpg`
 
-### 1. Auditoria de UI e documentação dos gaps
-- Mapear o layout atual (`ImportScreen`, `MainInterface`, `ScriptView`, `TableView`, modais e toasts) para identificar desalinhamentos nos espaçamentos, componentes mistas (ex: `Button` com hard-coded classes) e uso inconsistente de tokens.
-- Criar notas no repositório (ou backlog interno) que apontem os ajustes prioritários: cabeçalho fixo, grade de cards, visuais em modo escuro/claro, estados de carregamento e cópias.
+## 2. Implementação Técnica
 
-### 2. Reestruturação por domínio
-- Criar subpastas como `components/import`, `components/script`, `components/table`, `components/modal` e migrar componentes correspondentes, mantendo exports nomeados consistentes e re-exportando quando fizer sentido.
-- Inventariar hooks e helpers (ex: `useDocumentStore`, `dataProcessor`) para garantir que o domínios compartilhem importações claras, reduzindo caminhos relativos duplicados.
-- Introduzir arquivos de índice (`index.ts`) sempre que agrupamentos tiverem mais de um componente para facilitar `import { X } from "@/components/script"` no futuro.
+A lógica será centralizada em um novo utilitário e integrada à função que já transforma texto em links, garantindo que a mudança seja aplicada em toda a aplicação de forma consistente.
 
-### 3. Tema global e tokens
-- Adicionar `styles/theme.css` (ou `variables.css`) com root variables para cores principais, secundárias, superfícies, bordas, sombra e tipografia, incluindo variantes claras e escuras.
-- Importar esse arquivo em `app/layout.tsx` para que o Next aproveite os tokens no CSS global; garantir que `next-themes` sobreponha `data-theme` ou classes no `html`.
-- Ajustar o toggle de tema em `MainInterface` para usar o novo token (ex: `bg-primary`, `text-on-primary`) e remover classes inline que contrariam o sistema.
-- Propagar as variáveis nos componentes (botoes, cards, badges) usando `cn` e criando classes utilitárias no CSS (ex: `.surface-card`, `.border-divider`).
+### 2.1. Lógica de Encurtamento de URL
 
-### 4. Uniformização dos componentes críticos
-- Padronizar os componentes visuais reutilizados (botões, cartões, badges) utilizando as variantes já expostas em `components/ui`.
-- Criar wrappers ou variantes locais se necessário (ex: `interface ScriptCard`) para garantir títulos, copy e grid consistentes.
-- Garantir que os novos componentes usem `cn` (`lib/utils.ts`) sempre que houver lógica de classes condicional, e que eles aceitem `className` e `aria` props para flexibilidade.
-- Validar o uso correto de tokens em listas/ tabelas (ex: bordas `border-border`, `bg-secondary` etc) e expandir a coleção de tokens se precisar de novos estados (ex: `state-error`, `state-success`).
+Para manter o código organizado, a lógica de encurtamento será criada em um arquivo separado.
 
-### 5. Documentação e comunicação
-- Criar `spec/ui-guidelines.md` que explique o sistema de tokens, as convenções de nomeação, a obrigatoriedade de exports nomeados e como documentar componentes.
-- Registrar as decisões tomadas na reorganização (ex: por que a `BreakdownModal` mudou de pasta) e listar padrões recomendados (caminhos, temas, testes visuais).
-- Compartilhar a proposta em uma reunião/revisão rápida para alinhar o time antes de entrar na Fase 3.
+-   **Novo Arquivo:** `lib/urlUtils.ts`
+-   **Nova Função:** `shortenUrl(url: string): string`
+-   **Funcionamento:**
+    1.  A função receberá uma URL completa.
+    2.  Ela usará a API nativa de URL do navegador para extrair o **domínio** (`hostname`) e o **caminho** (`pathname`).
+    3.  O domínio terá o prefixo `www.` removido, se existir.
+    4.  A parte final do caminho (geralmente o nome do arquivo) será extraída.
+    5.  A função retornará uma nova string combinando `dominio...final-do-caminho`.
+    6.  Casos onde a URL não tem um caminho ou arquivo serão tratados para evitar erros.
 
-## Critérios de sucesso
-- Layout e componentes reutilizam a mesma paleta, espaçamentos e tokens documentados em `styles/theme.css`.
-- A árvore de `components/` reflete domínios claros com índices e exports consistentes.
-- As partes críticas da interface (botões, cards, badges) usam variantes do design system.
-- A documentação de boas práticas (`spec/ui-guidelines.md`) orienta novos contribuidores.
-- Stakeholders conseguem validar a interface com base nas melhorias documentadas.
+### 2.2. Integração com a Interface
 
-## Riscos e dependências
-- Reorganizar componentes pode impactar importações em outros arquivos; um check rápido do TypeScript (`pnpm lint`) deve ser usado para confirmar.
-- Tokens novos exigem sincronização com o toggle de tema; é preciso validar manualmente o comportamento dark/light após cada refactor.
+A nova função será usada dentro do nosso utilitário `linkify`, que já é responsável por encontrar e formatar links.
+
+-   **Arquivo a ser Modificado:** `lib/linkUtils.tsx`
+-   **Abordagem:**
+    1.  A função `linkify` será ajustada para importar e usar a nova função `shortenUrl`.
+    2.  Ao encontrar uma URL no texto, a `linkify` continuará criando uma tag `<a>` com o atributo `href` contendo a **URL completa** (para que o clique funcione corretamente).
+    3.  No entanto, o **texto visível** do link será a versão curta gerada pela `shortenUrl`.
+-   **Benefício:** Como os componentes `TableView` e `ScriptView` já usam `linkify`, a mudança será refletida automaticamente em ambos os lugares, garantindo consistência sem precisar alterar os componentes diretamente.

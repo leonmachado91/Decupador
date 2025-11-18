@@ -11,6 +11,7 @@ export interface Asset {
 
 export interface Scene {
   id: string
+  position: number
   narrativeText: string
   rawComment: string
   status: 'Pendente' | 'Concluído'
@@ -36,6 +37,8 @@ interface DocumentState {
   clearDocumentData: () => void
   updateScene: (id: string, scene: Partial<Scene>) => void
   addAssetToScene: (sceneId: string, asset: Asset) => void
+  sortCriteria: string | null
+  setSortCriteria: (criteria: string | null) => void
 }
 
 // Criar o store com persistência no localStorage
@@ -60,7 +63,9 @@ export const useDocumentStore = create<DocumentState>()(
             ? { ...scene, assets: [...scene.assets, asset] } 
             : scene
         )
-      }))
+      })),
+      sortCriteria: null,
+      setSortCriteria: (criteria) => set({ sortCriteria: criteria })
     }),
     {
       name: 'document-storage', // Nome da chave no localStorage

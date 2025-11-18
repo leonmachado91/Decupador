@@ -1,4 +1,5 @@
 import React from 'react';
+import { shortenUrl } from './urlUtils';
 
 export const linkify = (text: string): React.ReactNode[] => {
     if (typeof text !== 'string') {
@@ -23,7 +24,7 @@ export const linkify = (text: string): React.ReactNode[] => {
             result.push(text.substring(lastIndex, index));
         }
 
-        // Add the link
+        // Add the link with shortened text
         result.push(
             <a
                 key={i}
@@ -31,8 +32,9 @@ export const linkify = (text: string): React.ReactNode[] => {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline"
+                title={url} // Show full URL on hover
             >
-                {url}
+                {shortenUrl(url)}
             </a>
         );
 

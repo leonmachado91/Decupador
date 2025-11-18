@@ -12,10 +12,17 @@ import type { Scene } from '@/lib/stores/documentStore'
 import React from 'react'
 import { linkify } from "@/lib/linkUtils"
 import { decodeHtmlEntities } from '@/lib/dataProcessor'
+import { sortScenes } from '@/lib/sortUtils'
 
-export function TableView({ scenes }: TableViewProps) {
+export function TableView({ scenes: initialScenes }: TableViewProps) {
   const [selectedRow, setSelectedRow] = useState<number | null>(null)
   const updateScene = useDocumentStore((state) => state.updateScene)
+  const sortCriteria = useDocumentStore((state) => state.sortCriteria)
+  const setSortCriteria = useDocumentStore((state) => state.setSortCriteria)
+
+  const scenes = React.useMemo(() => {
+    return sortScenes(initialScenes, sortCriteria)
+  }, [initialScenes, sortCriteria])
 
   // Função para lidar com mudanças no status
   const handleStatusChange = (sceneId: string, status: 'Pendente' | 'Concluído') => {
@@ -37,19 +44,33 @@ export function TableView({ scenes }: TableViewProps) {
     <>
       <div className="h-[calc(100vh-4rem)] overflow-auto p-6">
         <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-end p-4">
+            <Select value={sortCriteria || "none"} onValueChange={(value) => setSortCriteria(value === "none" ? null : value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Ordenar por..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Ordem Original</SelectItem>
+                <SelectItem value="narrativeText_asc">Roteiro (A-Z)</SelectItem>
+                <SelectItem value="narrativeText_desc">Roteiro (Z-A)</SelectItem>
+                <SelectItem value="rawComment_asc">Comentário (A-Z)</SelectItem>
+                <SelectItem value="rawComment_desc">Comentário (Z-A)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="sticky top-0 bg-secondary/80 backdrop-blur">
                 <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Trecho Narrado</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Comentário Bruto</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Tipo de Mídia</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Link / Asset</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Timestamp</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Diretriz/Nota</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Notas do Editor</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Ações</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[300px]">Trecho Narrado</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[300px]">Comentário Bruto</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Tipo de Mídia</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Link / Asset</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[100px]">Timestamp</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Diretriz/Nota</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Status</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[200px]">Notas do Editor</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Ações</th>
                 </tr>
               </thead>
               <tbody>

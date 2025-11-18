@@ -14,7 +14,7 @@
   --primary: hsl(350 70% 42%);
   --primary-foreground: oklch(0.98 0 0);
   --secondary: hsl(10 12% 94%);
-  --secondary-foreground: oklch(0.98 0 0);
+  --secondary-foreground: hsl(15 18% 12%);
   --muted: hsl(10 12% 94%);
   --muted-foreground: oklch(0.65 0 0);
   --accent: hsl(15 35% 88%);
@@ -76,7 +76,7 @@
 }
 
 @theme inline {
-  --font-sans: 'Roboto', 'Roboto Fallback';
+
   --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
