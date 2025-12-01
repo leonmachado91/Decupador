@@ -1,3 +1,5 @@
+import { URL } from 'url';
+
 /**
  * Encurta uma URL para exibição, mostrando o domínio e o final do caminho.
  * Ex: "https://www.example.com/path/to/a/very/long/file.html"
@@ -42,3 +44,24 @@ export const shortenUrl = (urlString: string, maxLength: number = 40): string =>
     return `${start}...${end}`;
   }
 };
+
+/**
+ * Retorna a URL de preview (thumbnail) para um dado link.
+ * Atualmente suporta thumbnails do YouTube. Para outros links, retorna um placeholder.
+ * @param url O link para o qual gerar o preview.
+ * @returns A URL da imagem de preview.
+ */
+export const getLinkPreview = (url: string): string => {
+  // Regex para extrair o ID de vídeo do YouTube
+  const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:m\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=|embed\/|v\/|)([\w-]{11})(?:\S+)?/i;
+  const match = url.match(youtubeRegex);
+
+  if (match && match[1]) {
+    const videoId = match[1];
+    return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`; // Thumbnail de alta qualidade
+  }
+
+  // Placeholder para outros tipos de links
+  return '/placeholder.jpg'; // Certifique-se de que este placeholder exista em sua pasta public
+};
+

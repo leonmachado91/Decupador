@@ -1,5 +1,6 @@
 import React from 'react';
 import { shortenUrl } from './urlUtils';
+import { InteractiveLink } from '@/components/ui/interactive-link'; // Importar InteractiveLink
 
 export const linkify = (text: string): React.ReactNode[] => {
     if (typeof text !== 'string') {
@@ -24,18 +25,15 @@ export const linkify = (text: string): React.ReactNode[] => {
             result.push(text.substring(lastIndex, index));
         }
 
-        // Add the link with shortened text
+        // Add the link with shortened text using InteractiveLink
         result.push(
-            <a
+            <InteractiveLink
                 key={i}
                 href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
                 title={url} // Show full URL on hover
             >
                 {shortenUrl(url)}
-            </a>
+            </InteractiveLink>
         );
 
         lastIndex = index + url.length;

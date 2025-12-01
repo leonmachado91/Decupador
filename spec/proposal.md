@@ -1,38 +1,36 @@
-# Proposta: Encurtamento de Links na Exibição
+# Proposta: Previews e Ações em Links
 
 ## 1. Visão Geral
 
-O objetivo desta proposta é melhorar a legibilidade da interface, especificamente nos campos que exibem comentários e podem conter URLs longas. Em vez de mostrar a URL completa, exibiremos uma versão abreviada que mantém as partes mais identificáveis do link (o domínio e o nome do arquivo).
+Esta proposta detalha a implementação de duas funcionalidades para enriquecer a interação com links na aplicação:
+1.  **Ação Rápida de Cópia:** Um botão com um ícone aparecerá ao passar o mouse sobre um link, permitindo copiá-lo para a área de transferência com um único clique.
+2.  **Preview de Conteúdo:** Ao passar o mouse sobre um link de imagem ou vídeo (YouTube), um pequeno card aparecerá exibindo uma miniatura (thumbnail) do conteúdo.
 
-**Exemplo:**
--   **URL Atual:** `https://upload.wikimedia.org/wikipedia/commons/f/fe/Engenho_de_acucar_1816.jpg`
--   **Exibição Proposta:** `wikimedia.org...Engenho_de_acucar_1816.jpg`
+## 2. Arquitetura da Solução
 
-## 2. Implementação Técnica
+Para manter o código limpo e reutilizável, encapsularemos as novas funcionalidades em um componente dedicado.
 
-A lógica será centralizada em um novo utilitário e integrada à função que já transforma texto em links, garantindo que a mudança seja aplicada em toda a aplicação de forma consistente.
+-   **Novo Componente - `InteractiveLink`:** Criaremos um novo componente em `components/ui/interactive-link.tsx`. Ele será responsável por renderizar o link e gerenciar toda a lógica de hover, incluindo o botão de cópia e o card de preview.
+-   **Componente de UI - `HoverCard`:** Utilizaremos o componente `HoverCard` da biblioteca `shadcn/ui`, que já faz parte do projeto. Ele é ideal para exibir conteúdo rico, como uma imagem de preview, quando o usuário passa o mouse sobre um elemento.
+-   **Refatoração do `linkify`:** A função `linkify` em `lib/linkUtils.tsx`, que hoje cria links simples (`<a>`), será modificada para usar o nosso novo e poderoso componente `InteractiveLink`.
 
-### 2.1. Lógica de Encurtamento de URL
+## 3. Implementação Detalhada
 
-Para manter o código organizado, a lógica de encurtamento será criada em um arquivo separado.
+### 3.1. Botão de Cópia
 
--   **Novo Arquivo:** `lib/urlUtils.ts`
--   **Nova Função:** `shortenUrl(url: string): string`
--   **Funcionamento:**
-    1.  A função receberá uma URL completa.
-    2.  Ela usará a API nativa de URL do navegador para extrair o **domínio** (`hostname`) e o **caminho** (`pathname`).
-    3.  O domínio terá o prefixo `www.` removido, se existir.
-    4.  A parte final do caminho (geralmente o nome do arquivo) será extraída.
-    5.  A função retornará uma nova string combinando `dominio...final-do-caminho`.
-    6.  Casos onde a URL não tem um caminho ou arquivo serão tratados para evitar erros.
+1.  O componente `InteractiveLink` terá um estado interno para controlar a visibilidade do botão.
+2.  Usando CSS (Tailwind), o botão de cópia (com um ícone da biblioteca `lucide-react`) será posicionado sobre o link. Ele ficará oculto por padrão e se tornará visível apenas no evento `hover`.
+3.  Ao ser clicado, o botão executará `navigator.clipboard.writeText()` para copiar a URL completa e usará o hook `useToast` para exibir uma notificação de sucesso ("Link copiado!").
 
-### 2.2. Integração com a Interface
+### 3.2. Preview de Conteúdo
 
-A nova função será usada dentro do nosso utilitário `linkify`, que já é responsável por encontrar e formatar links.
+1.  O componente `InteractiveLink` será envolvido pelo `HoverCard` da `shadcn/ui`. O link em si funcionará como o gatilho (`HoverCardTrigger`).
+2.  O conteúdo do card (`HoverCardContent`) conterá a lógica para decidir o que exibir.
+3.  Criaremos uma função auxiliar, `getLinkPreview(url)`, que analisará a URL:
+    -   **Se for uma imagem** (terminando em `.jpg`, `.png`, `.gif`, etc.), a função retornará um componente `<img>` com a própria URL.
+    -   **Se for um vídeo do YouTube**, a função extrairá o ID do vídeo e retornará um `<img>` apontando para a URL de thumbnail fornecida pelo YouTube (`img.youtube.com/vi/<ID>/0.jpg`). Isso é muito mais leve do que carregar o player de vídeo.
+    -   Para qualquer outro tipo de link, nenhum preview será exibido.
 
--   **Arquivo a ser Modificado:** `lib/linkUtils.tsx`
--   **Abordagem:**
-    1.  A função `linkify` será ajustada para importar e usar a nova função `shortenUrl`.
-    2.  Ao encontrar uma URL no texto, a `linkify` continuará criando uma tag `<a>` com o atributo `href` contendo a **URL completa** (para que o clique funcione corretamente).
-    3.  No entanto, o **texto visível** do link será a versão curta gerada pela `shortenUrl`.
--   **Benefício:** Como os componentes `TableView` e `ScriptView` já usam `linkify`, a mudança será refletida automaticamente em ambos os lugares, garantindo consistência sem precisar alterar os componentes diretamente.
+### 3.3. Impacto no Código Existente
+
+A beleza desta abordagem é seu baixo impacto. A única alteração no código existente será na função `linkify`, que passará a renderizar `<InteractiveLink />` em vez de `<a>`. Como `linkify` já é usado em toda a aplicação, as novas funcionalidades aparecerão em todos os lugares automaticamente.
