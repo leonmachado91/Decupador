@@ -1,29 +1,35 @@
-"use client"
+'use client'
 
-import { useEffect, useMemo, useState } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { FloatingDecupageMenu } from "@/components/script/floating-decupage-menu"
-import { BreakdownModal } from "@/components/modal"
-import { useDocumentStore } from "@/lib/stores/documentStore"
-import type { AssetType, Scene, SortCriteria } from "@/lib/stores/documentStore"
-import { linkify } from "@/lib/linkUtils"
-import { getUserPreferences, saveUserPreferences } from "@/lib/api/preferences"
-import { decodeHtmlEntities } from "@/lib/dataProcessor"
-import { sortScenes } from "@/lib/sortUtils"
-import { sanitizePlainText } from "@/lib/sanitize"
-import { useTextSelection } from "@/hooks/use-text-selection"
-import { useToast } from "@/hooks/use-toast"
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
-import { useSupabaseUser } from "@/hooks/use-supabase-user"
-import { InteractiveLink } from "@/components/ui/interactive-link"
-import { z } from "zod"
-import { Clock3, Edit, FileText, Image as ImageIcon, Link2, Music, Video } from "lucide-react"
-import { TableViewRow } from "./table-view-row"
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import { FloatingDecupageMenu } from '@/components/script/floating-decupage-menu'
+import { BreakdownModal } from '@/components/modal'
+import { useDocumentStore } from '@/lib/stores/documentStore'
+import type { AssetType, Scene, SortCriteria } from '@/lib/stores/documentStore'
+import { getUserPreferences, saveUserPreferences } from '@/lib/api/preferences'
+import { sortScenes } from '@/lib/sortUtils'
+import { useTextSelection } from '@/hooks/use-text-selection'
+import { useToast } from '@/hooks/use-toast'
+import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { useSupabaseUser } from '@/hooks/use-supabase-user'
+import { z } from 'zod'
+import { FileText } from 'lucide-react'
+import { TableViewRow } from './table-view-row'
 
 interface TableViewProps {
   scenes: Scene[]
@@ -34,53 +40,28 @@ type PersistResult = { error: Error | null; localOnly?: boolean }
 
 const assetSchema = z
   .object({
-    type: z.enum(["link", "image", "video", "audio", "timestamp", "document"]),
-    value: z.string().trim().min(1, "Preencha um valor"),
+    type: z.enum(['link', 'image', 'video', 'audio', 'timestamp', 'document']),
+    value: z.string().trim().min(1, 'Preencha um valor'),
   })
   .superRefine((data, ctx) => {
-    if (data.type === "timestamp") {
+    if (data.type === 'timestamp') {
       if (!/^\d{1,2}:\d{2}(?::\d{2})?$/.test(data.value)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use formato HH:MM ou HH:MM:SS" })
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Use formato HH:MM ou HH:MM:SS' })
       }
     } else {
       try {
         const url = new URL(data.value)
-        if (!["http:", "https:"].includes(url.protocol)) {
-          throw new Error("Invalid protocol")
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          throw new Error('Invalid protocol')
         }
       } catch {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe uma URL valida (http/https)" })
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Informe uma URL valida (http/https)',
+        })
       }
     }
   })
-
-const assetLabels: Record<AssetType, string> = {
-  link: "Link",
-  image: "Imagem",
-  video: "Video",
-  audio: "Audio",
-  timestamp: "Timestamp",
-  document: "Documento",
-}
-
-const getAssetIcon = (type: AssetType) => {
-  switch (type) {
-    case "link":
-      return <Link2 className="h-3.5 w-3.5" />
-    case "image":
-      return <ImageIcon className="h-3.5 w-3.5" />
-    case "video":
-      return <Video className="h-3.5 w-3.5" />
-    case "audio":
-      return <Music className="h-3.5 w-3.5" />
-    case "timestamp":
-      return <Clock3 className="h-3.5 w-3.5" />
-    case "document":
-      return <FileText className="h-3.5 w-3.5" />
-    default:
-      return null
-  }
-}
 
 export function TableView({ scenes: initialScenes }: TableViewProps) {
   const updateScene = useDocumentStore((state) => state.updateScene)
@@ -102,11 +83,14 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
     if (!selectionRange) return false
     const container = selectionRange.commonAncestorContainer
     const element = container.nodeType === 1 ? (container as Element) : container.parentElement
-    return !!element?.closest("[data-scene-id]")
+    return !!element?.closest('[data-scene-id]')
   }, [selectionRange])
   const supabaseClient = useMemo(() => createSupabaseBrowserClient(), [])
 
-  const scenes = useMemo(() => sortScenes(initialScenes, sortCriteria), [initialScenes, sortCriteria])
+  const scenes = useMemo(
+    () => sortScenes(initialScenes, sortCriteria),
+    [initialScenes, sortCriteria],
+  )
 
   // Hydrate sort preference from Supabase
   useEffect(() => {
@@ -125,32 +109,39 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
       const next = { ...prev }
       initialScenes.forEach((scene) => {
         if (!next[scene.id]) {
-          next[scene.id] = { type: "link", value: "" }
+          next[scene.id] = { type: 'link', value: '' }
         }
       })
       return next
     })
   }, [initialScenes])
 
-  const updateSceneRemote = async (sceneId: string, payload: Partial<Scene>): Promise<PersistResult> => {
+  const updateSceneRemote = async (
+    sceneId: string,
+    payload: Partial<Scene>,
+  ): Promise<PersistResult> => {
     if (!userId) {
       return { error: null, localOnly: true }
     }
 
     const { error } = await supabaseClient
-      .from("scenes")
+      .from('scenes')
       .update({
         status: payload.status,
         editor_notes: payload.editorNotes,
         narrative_text: payload.narrativeText,
       })
-      .eq("id", sceneId)
-      .eq("user_id", userId)
+      .eq('id', sceneId)
+      .eq('user_id', userId)
 
     return { error: error ? new Error(error.message) : null }
   }
 
-  const saveAssetRemote = async (sceneId: string, type: AssetType, value: string): Promise<PersistResult> => {
+  const saveAssetRemote = async (
+    sceneId: string,
+    type: AssetType,
+    value: string,
+  ): Promise<PersistResult> => {
     const assetId = crypto.randomUUID()
 
     if (!userId) {
@@ -158,7 +149,7 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
       return { error: null, localOnly: true }
     }
 
-    const { error } = await supabaseClient.from("scene_assets").insert({
+    const { error } = await supabaseClient.from('scene_assets').insert({
       id: assetId,
       scene_id: sceneId,
       user_id: userId,
@@ -179,8 +170,8 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
   }
 
   const handleMenuAction = async (
-    type: "scene" | "note" | "timecode" | "video" | "image" | "link",
-    text: string
+    type: 'scene' | 'note' | 'timecode' | 'video' | 'image' | 'link',
+    text: string,
   ) => {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
@@ -191,14 +182,14 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
         ? (range.commonAncestorContainer as Element)
         : range.commonAncestorContainer.parentElement
 
-    const sceneRow = container?.closest("[data-scene-id]")
-    const targetSceneId = sceneRow?.getAttribute("data-scene-id")
+    const sceneRow = container?.closest('[data-scene-id]')
+    const targetSceneId = sceneRow?.getAttribute('data-scene-id')
 
     if (!targetSceneId) {
       toast({
-        variant: "destructive",
-        title: "Selecione dentro da tabela",
-        description: "Escolha um texto dentro de uma linha para vincular direto a cena.",
+        variant: 'destructive',
+        title: 'Selecione dentro da tabela',
+        description: 'Escolha um texto dentro de uma linha para vincular direto a cena.',
       })
       return
     }
@@ -207,57 +198,83 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
     if (!scene) return
 
     switch (type) {
-      case "timecode": {
-        const timeResult = await saveAssetRemote(targetSceneId, "timestamp", text)
+      case 'timecode': {
+        const timeResult = await saveAssetRemote(targetSceneId, 'timestamp', text)
         if (timeResult.error) {
-          toast({ variant: "destructive", title: "Erro ao salvar timestamp", description: timeResult.error.message })
+          toast({
+            variant: 'destructive',
+            title: 'Erro ao salvar timestamp',
+            description: timeResult.error.message,
+          })
         } else if (timeResult.localOnly) {
-          toast({ title: "Timestamp salvo localmente", description: "Entre para sincronizar com o Supabase." })
+          toast({
+            title: 'Timestamp salvo localmente',
+            description: 'Entre para sincronizar com o Supabase.',
+          })
         } else {
-          toast({ title: "Timestamp adicionado", description: `"${text}" ligado a cena.` })
+          toast({ title: 'Timestamp adicionado', description: `"${text}" ligado a cena.` })
         }
         break
       }
-      case "video":
-      case "image":
-      case "link": {
-        const linkResult = await saveAssetRemote(targetSceneId, "link", text)
+      case 'video':
+      case 'image':
+      case 'link': {
+        const linkResult = await saveAssetRemote(targetSceneId, 'link', text)
         if (linkResult.error) {
-          toast({ variant: "destructive", title: "Erro ao salvar asset", description: linkResult.error.message })
+          toast({
+            variant: 'destructive',
+            title: 'Erro ao salvar asset',
+            description: linkResult.error.message,
+          })
         } else if (linkResult.localOnly) {
-          toast({ title: "Link salvo localmente", description: "Entre para sincronizar com o Supabase." })
+          toast({
+            title: 'Link salvo localmente',
+            description: 'Entre para sincronizar com o Supabase.',
+          })
         } else {
-          toast({ title: "Link criado", description: "Asset vinculado a cena." })
+          toast({ title: 'Link criado', description: 'Asset vinculado a cena.' })
         }
         break
       }
-      case "note": {
+      case 'note': {
         const newNotes = scene.editorNotes ? `${scene.editorNotes}\n${text}` : text
         updateScene(targetSceneId, { editorNotes: newNotes })
         const noteResult = await updateSceneRemote(targetSceneId, { editorNotes: newNotes })
         if (noteResult.error) {
-          toast({ variant: "destructive", title: "Erro ao salvar nota", description: noteResult.error.message })
+          toast({
+            variant: 'destructive',
+            title: 'Erro ao salvar nota',
+            description: noteResult.error.message,
+          })
         } else if (noteResult.localOnly) {
-          toast({ title: "Nota salva localmente", description: "Entre para sincronizar com o Supabase." })
+          toast({
+            title: 'Nota salva localmente',
+            description: 'Entre para sincronizar com o Supabase.',
+          })
         } else {
-          toast({ title: "Nota salva", description: "Nota adicionada ao editor." })
+          toast({ title: 'Nota salva', description: 'Nota adicionada ao editor.' })
         }
         break
       }
-      case "scene": {
+      case 'scene': {
         const newNarrative = scene.narrativeText ? `${scene.narrativeText}\n${text}` : text
         updateScene(targetSceneId, { narrativeText: newNarrative })
-        const narrativeResult = await updateSceneRemote(targetSceneId, { narrativeText: newNarrative })
+        const narrativeResult = await updateSceneRemote(targetSceneId, {
+          narrativeText: newNarrative,
+        })
         if (narrativeResult.error) {
           toast({
-            variant: "destructive",
-            title: "Erro ao salvar trecho",
+            variant: 'destructive',
+            title: 'Erro ao salvar trecho',
             description: narrativeResult.error.message,
           })
         } else if (narrativeResult.localOnly) {
-          toast({ title: "Trecho salvo localmente", description: "Entre para sincronizar com o Supabase." })
+          toast({
+            title: 'Trecho salvo localmente',
+            description: 'Entre para sincronizar com o Supabase.',
+          })
         } else {
-          toast({ title: "Trecho atualizado", description: "Texto anexado ao roteiro da cena." })
+          toast({ title: 'Trecho atualizado', description: 'Texto anexado ao roteiro da cena.' })
         }
         break
       }
@@ -272,7 +289,7 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
     window.getSelection()?.removeAllRanges()
   }
 
-  const handleStatusChange = async (sceneId: string, status: "Pendente" | "Concluido") => {
+  const handleStatusChange = async (sceneId: string, status: 'Pendente' | 'Concluido') => {
     const scene = scenes.find((s) => s.id === sceneId)
     if (!scene) return
 
@@ -283,12 +300,15 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
     if (result.error) {
       updateScene(sceneId, { status: previous })
       toast({
-        variant: "destructive",
-        title: "Nao foi possivel salvar o status",
+        variant: 'destructive',
+        title: 'Nao foi possivel salvar o status',
         description: result.error.message,
       })
     } else if (result.localOnly) {
-      toast({ title: "Status salvo localmente", description: "Entre na conta para sincronizar com o Supabase." })
+      toast({
+        title: 'Status salvo localmente',
+        description: 'Entre na conta para sincronizar com o Supabase.',
+      })
     }
   }
 
@@ -301,32 +321,35 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
 
     if (result.error) {
       toast({
-        variant: "destructive",
-        title: "Nao foi possivel salvar a nota",
+        variant: 'destructive',
+        title: 'Nao foi possivel salvar a nota',
         description: result.error.message,
       })
     } else if (result.localOnly) {
-      toast({ title: "Nota salva localmente", description: "Autentique-se para enviar ao Supabase." })
+      toast({
+        title: 'Nota salva localmente',
+        description: 'Autentique-se para enviar ao Supabase.',
+      })
     }
   }
 
-  const handleAssetFieldChange = (sceneId: string, field: "type" | "value", value: string) => {
+  const handleAssetFieldChange = (sceneId: string, field: 'type' | 'value', value: string) => {
     setAssetInputs((prev) => ({
       ...prev,
       [sceneId]: {
-        type: (field === "type" ? (value as AssetType) : prev[sceneId]?.type) ?? "link",
-        value: field === "value" ? value : prev[sceneId]?.value ?? "",
+        type: (field === 'type' ? (value as AssetType) : prev[sceneId]?.type) ?? 'link',
+        value: field === 'value' ? value : (prev[sceneId]?.value ?? ''),
       },
     }))
   }
 
   const handleAddAsset = async (sceneId: string) => {
-    const form = assetInputs[sceneId] ?? { type: "link", value: "" }
+    const form = assetInputs[sceneId] ?? { type: 'link', value: '' }
     const validation = assetSchema.safeParse(form)
 
     if (!validation.success) {
-      const message = validation.error.issues[0]?.message ?? "Preencha os campos para salvar"
-      toast({ variant: "destructive", title: "Asset invalido", description: message })
+      const message = validation.error.issues[0]?.message ?? 'Preencha os campos para salvar'
+      toast({ variant: 'destructive', title: 'Asset invalido', description: message })
       return
     }
 
@@ -335,35 +358,42 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
     setSavingAssetFor(null)
 
     if (result.error) {
-      toast({ variant: "destructive", title: "Erro ao salvar asset", description: result.error.message })
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao salvar asset',
+        description: result.error.message,
+      })
       return
     }
 
     if (result.localOnly) {
-      toast({ title: "Asset salvo localmente", description: "Entre para sincronizar com o Supabase." })
+      toast({
+        title: 'Asset salvo localmente',
+        description: 'Entre para sincronizar com o Supabase.',
+      })
     } else {
-      toast({ title: "Asset salvo", description: "Asset enviado para o Supabase." })
+      toast({ title: 'Asset salvo', description: 'Asset enviado para o Supabase.' })
     }
 
     setAssetInputs((prev) => ({
       ...prev,
-      [sceneId]: { ...prev[sceneId], value: "" },
+      [sceneId]: { ...prev[sceneId], value: '' },
     }))
   }
 
   const narrativeSortState =
-    sortCriteria && sortCriteria.startsWith("narrativeText")
-      ? sortCriteria.endsWith("desc")
-        ? "descending"
-        : "ascending"
-      : "none"
+    sortCriteria && sortCriteria.startsWith('narrativeText')
+      ? sortCriteria.endsWith('desc')
+        ? 'descending'
+        : 'ascending'
+      : 'none'
 
   const commentSortState =
-    sortCriteria && sortCriteria.startsWith("rawComment")
-      ? sortCriteria.endsWith("desc")
-        ? "descending"
-        : "ascending"
-      : "none"
+    sortCriteria && sortCriteria.startsWith('rawComment')
+      ? sortCriteria.endsWith('desc')
+        ? 'descending'
+        : 'ascending'
+      : 'none'
 
   return (
     <TooltipProvider delayDuration={120}>
@@ -387,23 +417,26 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
       <div className="flex h-full flex-col bg-background">
         <div className="flex items-center justify-end gap-3 px-6 pt-4 pb-2 border-b border-border/40 bg-background/50 backdrop-blur-sm sticky top-0 z-20">
           <Select
-            value={(sortCriteria ?? "none") as SortCriteria | "none"}
+            value={(sortCriteria ?? 'none') as SortCriteria | 'none'}
             onValueChange={async (value) => {
-              const parsed = value === "none" ? null : (value as SortCriteria)
+              const parsed = value === 'none' ? null : (value as SortCriteria)
               setSortCriteria(parsed)
               if (userId) {
                 const { error } = await saveUserPreferences(userId, parsed)
                 if (error) {
                   toast({
-                    variant: "destructive",
-                    title: "Erro ao salvar preferencia",
+                    variant: 'destructive',
+                    title: 'Erro ao salvar preferencia',
                     description: error,
                   })
                 }
               }
             }}
           >
-            <SelectTrigger aria-label="Ordenar cenas" className="h-8 w-[180px] text-xs bg-secondary/50 border-transparent hover:bg-secondary">
+            <SelectTrigger
+              aria-label="Ordenar cenas"
+              className="h-8 w-[180px] text-xs bg-secondary/50 border-transparent hover:bg-secondary"
+            >
               <SelectValue placeholder="Ordenar por..." />
             </SelectTrigger>
             <SelectContent>
@@ -431,7 +464,8 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
                 </EmptyHeader>
                 <EmptyContent>
                   <p className="text-sm text-muted-foreground">
-                    Quando houver cenas, elas aparecem aqui com status, assets e notas sincronizados.
+                    Quando houver cenas, elas aparecem aqui com status, assets e notas
+                    sincronizados.
                   </p>
                 </EmptyContent>
               </Empty>
@@ -442,14 +476,28 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
                 <thead className="sticky top-0 z-10 bg-secondary/95 backdrop-blur shadow-sm">
                   <tr className="border-b border-border">
                     <th
-                      aria-sort={narrativeSortState as "none" | "ascending" | "descending" | "other" | undefined}
+                      aria-sort={
+                        narrativeSortState as
+                          | 'none'
+                          | 'ascending'
+                          | 'descending'
+                          | 'other'
+                          | undefined
+                      }
                       scope="col"
                       className="w-[20%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
                     >
                       Trecho narrado
                     </th>
                     <th
-                      aria-sort={commentSortState as "none" | "ascending" | "descending" | "other" | undefined}
+                      aria-sort={
+                        commentSortState as
+                          | 'none'
+                          | 'ascending'
+                          | 'descending'
+                          | 'other'
+                          | undefined
+                      }
                       scope="col"
                       className="w-[20%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
                     >
@@ -489,9 +537,7 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
                     <th
                       scope="col"
                       className="w-[5%] px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-                    >
-
-                    </th>
+                    ></th>
                   </tr>
                 </thead>
                 <tbody className="bg-card">
@@ -499,8 +545,10 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
                     <TableViewRow
                       key={scene.id}
                       scene={scene}
-                      assetInput={assetInputs[scene.id] ?? { type: "link", value: "" }}
-                      onAssetInputChange={(field, value) => handleAssetFieldChange(scene.id, field, value)}
+                      assetInput={assetInputs[scene.id] ?? { type: 'link', value: '' }}
+                      onAssetInputChange={(field, value) =>
+                        handleAssetFieldChange(scene.id, field, value)
+                      }
                       onAddAsset={() => handleAddAsset(scene.id)}
                       isSavingAsset={savingAssetFor === scene.id}
                       onStatusChange={(status) => handleStatusChange(scene.id, status)}
