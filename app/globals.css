@@ -4,6 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --header-height: 4rem;
   /* Dark theme with bright cyan/blue accents inspired by analytics dashboard */
   --background: hsl(0 0% 100%);
   --foreground: hsl(15 18% 12%);
@@ -41,24 +42,27 @@
 }
 
 .dark {
-  --background: hsl(15 22% 7%);
+  --background: hsl(15 20% 6%);
+  /* Slightly darker/deeper */
   --foreground: hsl(12 12% 93%);
-  --card: hsl(15 22% 7%);
+  --card: hsl(15 20% 8%);
+  /* Slightly lighter than background for elevation */
   --card-foreground: oklch(0.98 0 0);
-  --popover: hsl(15 22% 7%);
+  --popover: hsl(15 20% 8%);
+  /* Match card */
   --popover-foreground: oklch(0.98 0 0);
   --primary: hsl(350 75% 58%);
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: hsl(15 15% 16%);
+  --secondary: hsl(15 15% 14%);
   --secondary-foreground: oklch(0.98 0 0);
-  --muted: hsl(15 15% 16%);
+  --muted: hsl(15 15% 14%);
   --muted-foreground: oklch(0.65 0 0);
-  --accent: hsl(20 25% 22%);
+  --accent: hsl(20 25% 18%);
   --accent-foreground: oklch(0.98 0 0);
   --destructive: hsl(0 72.2% 50.6%);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: hsl(15 15% 16%);
-  --input: hsl(15 15% 16%);
+  --border: hsl(15 15% 14%);
+  --input: hsl(15 15% 14%);
   --ring: hsl(350 75% 58%);
   --chart-1: hsl(350 75% 58%);
   --chart-2: hsl(12 68% 58%);
@@ -120,6 +124,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -153,16 +158,37 @@
     box-shadow: 0 0 30px rgba(59, 130, 246, 0.5), 0 6px 8px -1px rgba(0, 0, 0, 0.4);
     transform: translateY(-1px);
   }
+
+  .glass-panel {
+    @apply bg-background/70 backdrop-blur-md border border-border/50 shadow-xl;
+  }
+
+  .dark .glass-panel {
+    @apply bg-background/60 border-white/10;
+  }
 }
 
 /* Estilos para controle de overflow nos comentários */
 @layer utilities {
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .comment-text-overflow {
-    max-height: 120px; /* Altura máxima antes de mostrar a rolagem */
-    overflow-y: auto; /* Barra de rolagem vertical apenas se necessário */
-    overflow-wrap: break-word; /* Quebra palavras e links longos */
-    word-break: break-word; /* Garante a quebra em mais cenários */
-    padding-right: 8px; /* Espaço para a barra de rolagem não colar no texto */
-    scrollbar-width: thin; /* Deixa a barra de rolagem mais fina em navegadores como Firefox */
+    max-height: 120px;
+    /* Altura máxima antes de mostrar a rolagem */
+    overflow-y: auto;
+    /* Barra de rolagem vertical apenas se necessário */
+    overflow-wrap: break-word;
+    /* Quebra palavras e links longos */
+    word-break: break-word;
+    /* Garante a quebra em mais cenários */
+    padding-right: 8px;
+    /* Espaço para a barra de rolagem não colar no texto */
+    scrollbar-width: thin;
+    /* Deixa a barra de rolagem mais fina em navegadores como Firefox */
   }
 }

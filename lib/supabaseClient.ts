@@ -1,6 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from './supabase.types'
 
-let client: ReturnType<typeof createClient> | null = null
+let client: SupabaseClient<Database> | null = null
 
 export function getSupabase() {
   if (client) return client
@@ -12,6 +13,6 @@ export function getSupabase() {
     return null
   }
 
-  client = createClient(supabaseUrl, supabaseAnonKey)
+  client = createClient<Database>(supabaseUrl, supabaseAnonKey)
   return client
 }

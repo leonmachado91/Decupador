@@ -1,10 +1,9 @@
 import type { Metadata } from 'next'
-import { Roboto } from 'next/font/google'
+import { Inter } from 'next/font/google'
 
-const roboto = Roboto({
-  weight: ['400', '700'],
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-roboto',
+  variable: '--font-inter',
 })
 
 import { Analytics } from '@vercel/analytics/next'
@@ -25,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${roboto.variable} ${roboto.className} font-sans antialiased`}>
+      <body className={`${inter.variable} ${inter.className} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
           <Toaster />

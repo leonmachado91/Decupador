@@ -1,25 +1,28 @@
 "use client"
 
+import React from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MessageSquare } from "lucide-react"
 import { linkify } from "@/lib/linkUtils"
-import type { Scene, GoogleDocData } from '@/lib/stores/documentStore'
-import { extractFormattedText, decodeHtmlEntities } from '@/lib/dataProcessor'
-import { useDocumentStore } from '@/lib/stores/documentStore'
-import { sortScenes } from '@/lib/sortUtils'
-import React from 'react'
-
+import type { Scene, GoogleDocData } from "@/lib/stores/documentStore"
+import { extractFormattedText, decodeHtmlEntities } from "@/lib/dataProcessor"
+import { useDocumentStore } from "@/lib/stores/documentStore"
+import { sortScenes } from "@/lib/sortUtils"
+import { sanitizePlainText } from "@/lib/sanitize"
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
-
 import { useTextSelection } from "@/hooks/use-text-selection"
 import { FloatingDecupageMenu } from "./floating-decupage-menu"
+import { DocumentContent } from "./document-content"
+import { ScenesSidebar } from "./scenes-sidebar"
 import { BreakdownModal } from "@/components/modal"
 import { useToast } from "@/hooks/use-toast"
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
+import { useSupabaseUser } from "@/hooks/use-supabase-user"
 
 interface ScriptViewProps {
   documentData: GoogleDocData | null
@@ -30,21 +33,79 @@ export function ScriptView({ documentData, scenes: initialScenes }: ScriptViewPr
   const sortCriteria = useDocumentStore((state) => state.sortCriteria)
   const updateScene = useDocumentStore((state) => state.updateScene)
   const addAssetToScene = useDocumentStore((state) => state.addAssetToScene)
+  const hoveredSceneId = useDocumentStore((state) => state.hoveredSceneId)
+  const setHoveredSceneId = useDocumentStore((state) => state.setHoveredSceneId)
   const { toast } = useToast()
-
-  // Modal State
-  const [breakdownModalOpen, setBreakdownModalOpen] = React.useState(false)
-  const [selectedSceneId, setSelectedSceneId] = React.useState<string | null>(null)
-
-  // Text Selection Hook
-  const { text: selectedText, rect: selectionRect, isCollapsed } = useTextSelection();
+  const { userId } = useSupabaseUser()
+  const supabaseClient = React.useMemo(() => createSupabaseBrowserClient(), [])
 
   const scenes = React.useMemo(() => {
     return sortScenes(initialScenes, sortCriteria)
   }, [initialScenes, sortCriteria])
 
-  // Hover State for Bidirectional Highlighting
-  const [hoveredSceneId, setHoveredSceneId] = React.useState<string | null>(null)
+  const [breakdownModalOpen, setBreakdownModalOpen] = React.useState(false)
+  const [selectedSceneId, setSelectedSceneId] = React.useState<string | null>(null)
+  const { text: selectedText, rect: selectionRect, range: selectionRange } = useTextSelection()
+
+  const isSelectionInScene = React.useMemo(() => {
+    if (!selectionRange) return false
+    const container = selectionRange.commonAncestorContainer
+    const element = container.nodeType === 1 ? (container as Element) : container.parentElement
+    return !!element?.closest("[data-scene-id]")
+  }, [selectionRange])
+
+  // Scroll sincronizado removido conforme solicitado
+  // React.useEffect(() => {
+  //   if (!hoveredSceneId) return
+  //   const el = document.getElementById(`scene-card-${hoveredSceneId}`)
+  //   if (el) {
+  //     el.scrollIntoView({ behavior: "smooth", block: "center" })
+  //   }
+  // }, [hoveredSceneId])
+
+  // Helpers de persistencia e log
+  const logSceneEvent = async (sceneId: string, level: "info" | "warn" | "error", message: string) => {
+    if (!userId) return
+    await supabaseClient.from("scene_logs").insert({
+      scene_id: sceneId,
+      user_id: userId,
+      level,
+      message,
+    })
+  }
+
+  const updateSceneRemote = async (sceneId: string, payload: Partial<Scene>) => {
+    if (!userId) return
+    await supabaseClient
+      .from("scenes")
+      .update({
+        status: payload.status,
+        editor_notes: payload.editorNotes,
+        narrative_text: payload.narrativeText,
+      })
+      .eq("id", sceneId)
+      .eq("user_id", userId)
+  }
+
+  const saveAssetRemote = async (
+    sceneId: string,
+    type: "timestamp" | "link" | "image" | "video" | "audio" | "document",
+    value: string
+  ) => {
+    if (!userId) return
+    const assetId = crypto.randomUUID()
+    const { error } = await supabaseClient.from("scene_assets").insert({
+      id: assetId,
+      scene_id: sceneId,
+      user_id: userId,
+      asset_type: type,
+      asset_value: value,
+    })
+    if (!error) {
+      addAssetToScene(sceneId, { id: assetId, type, value })
+      logSceneEvent(sceneId, "info", `Asset ${type} salvo`)
+    }
+  }
 
   // Handlers
   const handleOpenBreakdown = (sceneId: string) => {
@@ -52,185 +113,127 @@ export function ScriptView({ documentData, scenes: initialScenes }: ScriptViewPr
     setBreakdownModalOpen(true)
   }
 
-  const handleMenuAction = (type: 'scene' | 'note' | 'timecode' | 'video' | 'image' | 'link', text: string) => {
-    // Try to find the scene ID from the selection context
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+  const handleMenuAction = (
+    type: "scene" | "note" | "timecode" | "video" | "image" | "link",
+    text: string
+  ) => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
 
-    const range = selection.getRangeAt(0);
-    const container = range.commonAncestorContainer.nodeType === 1
-      ? range.commonAncestorContainer as Element
-      : range.commonAncestorContainer.parentElement;
+    const range = selection.getRangeAt(0)
+    const container =
+      range.commonAncestorContainer.nodeType === 1
+        ? (range.commonAncestorContainer as Element)
+        : range.commonAncestorContainer.parentElement
 
-    const sceneCard = container?.closest('[data-scene-id]');
-    const targetSceneId = sceneCard?.getAttribute('data-scene-id');
+    const sceneCard = container?.closest("[data-scene-id]")
+    const targetSceneId = sceneCard?.getAttribute("data-scene-id")
 
     if (targetSceneId) {
-      // Direct update if we are in a scene context (sidebar)
-      const scene = scenes.find(s => s.id === targetSceneId);
-      if (!scene) return;
+      const scene = scenes.find((s) => s.id === targetSceneId)
+      if (!scene) return
 
       switch (type) {
-        case 'timecode':
-          addAssetToScene(targetSceneId, { id: crypto.randomUUID(), type: 'timestamp', value: text });
-          toast({ title: "Timestamp atualizado", description: '"' + text + '" adicionado à cena.' });
-          break;
-        case 'video':
-        case 'image':
-        case 'link':
-          addAssetToScene(targetSceneId, { id: crypto.randomUUID(), type: 'link', value: text });
-          toast({ title: "Link adicionado", description: "Link/Asset vinculado à cena." });
-          break;
-        case 'note':
-          updateScene(targetSceneId, { editorNotes: scene.editorNotes ? `${scene.editorNotes}\n${text}` : text });
-          toast({ title: "Nota adicionada", description: "Nota adicionada ao editor." });
-          break;
-        case 'scene':
-          // If "Scene" is clicked on an existing scene, maybe append to narrative? 
-          // Or do nothing as it's for creating new scenes.
-          // For now, let's assume "Scene" button in this context might mean "Add to Narrative"
-          updateScene(targetSceneId, { narrativeText: scene.narrativeText ? `${scene.narrativeText}\n${text}` : text });
-          toast({ title: "Texto narrativo atualizado", description: "Texto adicionado à narrativa da cena." });
-          break;
+        case "timecode":
+          saveAssetRemote(targetSceneId, "timestamp", text)
+          toast({ title: "Timestamp atualizado", description: `"${text}" adicionado a cena.` })
+          break
+        case "video":
+        case "image":
+        case "link":
+          saveAssetRemote(targetSceneId, "link", text)
+          toast({ title: "Link adicionado", description: "Link/Asset vinculado a cena." })
+          break
+        case "note": {
+          const newNotes = scene.editorNotes ? `${scene.editorNotes}\n${text}` : text
+          updateScene(targetSceneId, { editorNotes: newNotes })
+          updateSceneRemote(targetSceneId, { editorNotes: newNotes })
+          toast({ title: "Nota adicionada", description: "Nota adicionada ao editor." })
+          break
+        }
+        case "scene": {
+          const newNarrative = scene.narrativeText ? `${scene.narrativeText}\n${text}` : text
+          updateScene(targetSceneId, { narrativeText: newNarrative })
+          updateSceneRemote(targetSceneId, { narrativeText: newNarrative })
+          toast({ title: "Texto narrativo atualizado", description: "Texto adicionado a narrativa da cena." })
+          break
+        }
       }
     } else {
-      // If we are NOT in a scene context (e.g. script body), we might want to create a new scene
-      // or just show a message that we need a target scene.
-      // For now, preserving the "Create Scene" behavior if type is 'scene'
-      if (type === 'scene') {
+      if (type === "scene") {
         toast({
           title: "Nova Cena",
-          description: "Funcionalidade de criar nova cena a partir do texto será implementada em breve.",
+          description: "Funcionalidade de criar nova cena a partir do texto sera implementada em breve.",
         })
       } else {
         toast({
           variant: "destructive",
-          title: "Ação inválida",
-          description: "Selecione um texto dentro de um cartão de comentário para vincular diretamente.",
+          title: "Acao invalida",
+          description: "Selecione um texto dentro de um cartao de comentario para vincular diretamente.",
         })
       }
     }
 
-    // Clear selection after action
     if (window.getSelection) {
-      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.removeAllRanges()
     }
   }
 
   const handleClearSelection = () => {
     if (window.getSelection) {
-      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.removeAllRanges()
     }
   }
 
-  // Função para renderizar o conteúdo do documento
-  const renderDocumentContent = () => {
-    if (!documentData?.body) return <p role="status">Conteúdo não disponível</p>
-
-    // Extrair e formatar o texto do documento
-    const documentText = extractFormattedText(documentData.body)
-
-    // Dividir o texto em parágrafos
-    const paragraphs = documentText.split('\n').filter(p => p.trim() !== '')
-
-    return (
-      <div className="max-w-none space-y-4">
-        {paragraphs.map((paragraph, index) => {
-          // Check if this paragraph is related to the hovered scene
-          const relatedScene = scenes.find(s => s.id === hoveredSceneId);
-          const isHighlighted = relatedScene && paragraph.includes(relatedScene.narrativeText);
-
-          return (
-            <div
-              key={index}
-              className={`text-base leading-relaxed text-foreground/90 transition-colors duration-200 rounded px-1 ${isHighlighted ? 'bg-yellow-500/20' : 'bg-transparent'}`}
-            >
-              {linkify(paragraph)}
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
-
   return (
-    <div className="h-[calc(100vh-4rem)] relative">
-      <FloatingDecupageMenu
-        selectionRect={selectionRect}
-        selectedText={selectedText}
-        onAction={handleMenuAction}
-        onClearSelection={handleClearSelection}
-      />
+    <div className="h-full relative">
+      {isSelectionInScene && (
+        <FloatingDecupageMenu
+          selectionRect={selectionRect}
+          selectedText={selectedText}
+          onAction={handleMenuAction}
+          onClearSelection={handleClearSelection}
+        />
+      )}
 
       {selectedSceneId && (
         <BreakdownModal
           isOpen={breakdownModalOpen}
           onClose={() => setBreakdownModalOpen(false)}
-          rowData={scenes.find(s => s.id === selectedSceneId)}
+          rowData={scenes.find((s) => s.id === selectedSceneId)}
         />
       )}
 
       <ResizablePanelGroup direction="horizontal">
-        {/* Script Content */}
-        <ResizablePanel defaultSize={70} minSize={30}>
-          <div className="h-full overflow-y-auto p-8">
-            <div className="mx-auto max-w-4xl space-y-6">
+        <ResizablePanel defaultSize={70} minSize={30} className="bg-background">
+          <div className="h-full overflow-y-auto p-8 md:p-12">
+            <div className="mx-auto max-w-4xl space-y-8">
               <div>
-                <h2 className="text-3xl font-bold mb-2">{documentData?.title || "Documento sem título"}</h2>
-                <p className="text-muted-foreground">Roteiro importado do Google Docs</p>
+                <h2 className="text-4xl font-bold mb-3 tracking-tight text-foreground">{documentData?.title || "Documento sem titulo"}</h2>
+                <p className="text-lg text-muted-foreground font-light">Roteiro importado do Google Docs</p>
               </div>
 
-              <Card className="p-8 bg-card/50">
-                {renderDocumentContent()}
+              <Card className="p-10 bg-card shadow-sm border-border/40">
+                <DocumentContent
+                  documentData={documentData}
+                  scenes={scenes}
+                  hoveredSceneId={hoveredSceneId}
+                  setHoveredSceneId={setHoveredSceneId}
+                />
               </Card>
             </div>
           </div>
         </ResizablePanel>
 
-        <ResizableHandle withHandle />
+        <ResizableHandle withHandle className="bg-border/50 hover:bg-primary/50 transition-colors" />
 
-        {/* Comments Sidebar */}
         <ResizablePanel defaultSize={30} minSize={20}>
-          <div className="h-full overflow-y-auto bg-card/30 p-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-6">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Diretrizes</h3>
-                <Badge variant="secondary" className="ml-auto">
-                  {scenes.length}
-                </Badge>
-              </div>
-
-              {scenes.map((scene) => (
-                <Card
-                  key={scene.id}
-                  data-scene-id={scene.id}
-                  onClick={() => handleOpenBreakdown(scene.id)}
-                  onMouseEnter={() => setHoveredSceneId(scene.id)}
-                  onMouseLeave={() => setHoveredSceneId(null)}
-                  className={`p-4 cursor-pointer transition-all hover:shadow-lg hover:shadow-primary/10 ${hoveredSceneId === scene.id ? 'border-primary ring-1 ring-primary' : 'hover:border-primary/50'}`}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-sm font-medium leading-relaxed comment-text-overflow">
-                        {linkify(decodeHtmlEntities(scene.rawComment))}
-                      </div>
-                      <Badge
-                        variant={scene.status === "Concluído" ? "default" : "secondary"}
-                        className={scene.status === "Concluído" ? "bg-chart-1" : ""}
-                      >
-                        {scene.status === "Concluído" ? "Concluído" : "Pendente"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <div className="h-1 w-1 rounded-full bg-primary" />
-                      <span>Vinculado a: "{scene.narrativeText}"</span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
+          <ScenesSidebar
+            scenes={scenes}
+            hoveredSceneId={hoveredSceneId}
+            setHoveredSceneId={setHoveredSceneId}
+            onOpenBreakdown={handleOpenBreakdown}
+          />
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

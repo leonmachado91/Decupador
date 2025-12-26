@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { FileText, Table, Download, Plus, Sun, Moon, Copy } from "lucide-react"
 import { useTheme } from 'next-themes'
+import { SegmentedControl } from "@/components/ui/segmented-control"
 
 interface HeaderProps {
     activeView: "script" | "table"
@@ -16,69 +17,65 @@ export function Header({ activeView, setActiveView, onExport, onCopyLinks, onNew
     const { theme, setTheme } = useTheme()
 
     return (
-        <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+        <header className="sticky top-0 z-50 border-b border-border/40 bg-background/60 backdrop-blur-xl supports-backdrop-filter:bg-background/60">
             <div className="flex h-16 items-center justify-between px-6">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-primary/10 p-2">
+                        <div className="rounded-lg bg-primary/10 p-2 ring-1 ring-primary/20">
                             <FileText className="h-5 w-5 text-primary" />
                         </div>
-                        <h1 className="text-xl font-bold">Decupador de Roteiro HI</h1>
+                        <h1 className="text-xl font-bold tracking-tight bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                            Decupador de Roteiro HI
+                        </h1>
                     </div>
 
                     {/* View Toggle */}
-                    <div className="flex items-center gap-2 rounded-lg bg-secondary p-1">
-                        <Button
-                            variant={activeView === "script" ? "default" : "ghost"}
-                            size="sm"
-                            onClick={() => setActiveView("script")}
-                        >
-                            <FileText className="mr-2 h-4 w-4" />
-                            Visão Roteiro
-                        </Button>
-                        <Button
-                            variant={activeView === "table" ? "default" : "ghost"}
-                            size="sm"
-                            onClick={() => setActiveView("table")}
-                        >
-                            <Table className="mr-2 h-4 w-4" />
-                            Visão Tabela
-                        </Button>
-                    </div>
+                    <SegmentedControl
+                        value={activeView}
+                        onChange={(v) => setActiveView(v as "script" | "table")}
+                        options={[
+                            { value: "script", label: "Roteiro", icon: <FileText className="w-4 h-4" /> },
+                            { value: "table", label: "Tabela", icon: <Table className="w-4 h-4" /> },
+                        ]}
+                        className="h-9"
+                    />
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <Button
                         variant="ghost"
                         size="icon"
                         aria-label="Alternar tema"
                         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        className="rounded-full hover:bg-secondary transition-colors"
                     >
                         {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                     </Button>
+
+                    <div className="h-4 w-px bg-border/50 mx-1" />
+
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         onClick={onExport}
-                        className="border-primary/30 hover:bg-primary/10 bg-transparent"
+                        className="gap-2 hover:bg-primary/10 hover:text-primary transition-colors"
                     >
-                        <Download className="mr-2 h-4 w-4" />
+                        <Download className="h-4 w-4" />
                         Exportar CSV
                     </Button>
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         onClick={onCopyLinks}
-                        className="border-primary/30 hover:bg-primary/10 bg-transparent"
+                        className="gap-2 hover:bg-primary/10 hover:text-primary transition-colors"
                     >
-                        <Copy className="mr-2 h-4 w-4" />
+                        <Copy className="h-4 w-4" />
                         Copiar Links
                     </Button>
                     <Button
-                        variant="outline"
                         onClick={onNewScript}
-                        className="border-primary/30 hover:bg-primary/10 bg-transparent"
+                        className="gap-2 btn-glossy bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
                     >
-                        <Plus className="mr-2 h-4 w-4" />
+                        <Plus className="h-4 w-4" />
                         Novo Roteiro
                     </Button>
                 </div>

@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-// Definição dos tipos para o estado da aplicação
-export interface Asset {
+export type AssetType = 'link' | 'image' | 'video' | 'audio' | 'timestamp' | 'document'
+export type SortCriteria = 'narrativeText_asc' | 'narrativeText_desc' | 'rawComment_asc' | 'rawComment_desc'
+
+export interface SceneAsset {
   id: string
-  type: string
+  type: AssetType
   value: string
   source?: string
 }
@@ -14,9 +16,9 @@ export interface Scene {
   position: number
   narrativeText: string
   rawComment: string
-  status: 'Pendente' | 'Concluído'
+  status: 'Pendente' | 'Concluido'
   editorNotes: string
-  assets: Asset[]
+  assets: SceneAsset[]
 }
 
 export interface GoogleDocData {
@@ -31,49 +33,52 @@ interface DocumentState {
   docId: string | null
   documentData: GoogleDocData | null
   scenes: Scene[]
+  hoveredSceneId: string | null
   setDocId: (docId: string) => void
   setDocumentData: (data: GoogleDocData) => void
   setScenes: (scenes: Scene[]) => void
   clearDocumentData: () => void
   updateScene: (id: string, scene: Partial<Scene>) => void
-  addAssetToScene: (sceneId: string, asset: Asset) => void
-  sortCriteria: string | null
-  setSortCriteria: (criteria: string | null) => void
+  addAssetToScene: (sceneId: string, asset: SceneAsset) => void
+  sortCriteria: SortCriteria | null
+  setSortCriteria: (criteria: SortCriteria | null) => void
+  setHoveredSceneId: (sceneId: string | null) => void
 }
 
-// Criar o store com persistência no localStorage
 export const useDocumentStore = create<DocumentState>()(
   persist(
     (set) => ({
       docId: null,
       documentData: null,
       scenes: [],
+      hoveredSceneId: null,
       setDocId: (docId) => set({ docId }),
       setDocumentData: (data) => set({ documentData: data }),
       setScenes: (scenes) => set({ scenes }),
       clearDocumentData: () => set({ docId: null, documentData: null, scenes: [] }),
-      updateScene: (id, sceneUpdate) => set((state) => ({
-        scenes: state.scenes.map((scene) => 
-          scene.id === id ? { ...scene, ...sceneUpdate } : scene
-        )
-      })),
-      addAssetToScene: (sceneId, asset) => set((state) => ({
-        scenes: state.scenes.map((scene) => 
-          scene.id === sceneId 
-            ? { ...scene, assets: [...scene.assets, asset] } 
-            : scene
-        )
-      })),
+      updateScene: (id, sceneUpdate) =>
+        set((state) => ({
+          scenes: state.scenes.map((scene) => (scene.id === id ? { ...scene, ...sceneUpdate } : scene)),
+        })),
+      addAssetToScene: (sceneId, asset) =>
+        set((state) => ({
+          scenes: state.scenes.map((scene) =>
+            scene.id === sceneId ? { ...scene, assets: [...scene.assets, asset] } : scene
+          ),
+        })),
       sortCriteria: null,
-      setSortCriteria: (criteria) => set({ sortCriteria: criteria })
+      setSortCriteria: (criteria) => set({ sortCriteria: criteria }),
+      setHoveredSceneId: (sceneId) => set({ hoveredSceneId: sceneId }),
     }),
     {
-      name: 'document-storage', // Nome da chave no localStorage
-      partialize: (state) => ({ 
-        docId: state.docId, 
+      name: 'document-storage',
+      partialize: (state) => ({
+        docId: state.docId,
         scenes: state.scenes,
-        documentData: state.documentData
-      }), // Campos a serem persistidos
+        documentData: state.documentData,
+        sortCriteria: state.sortCriteria,
+        hoveredSceneId: state.hoveredSceneId,
+      }),
     }
   )
 )

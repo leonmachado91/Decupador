@@ -1,48 +1,41 @@
-import React from 'react';
-import { shortenUrl } from './urlUtils';
-import { InteractiveLink } from '@/components/ui/interactive-link'; // Importar InteractiveLink
+﻿import React from "react"
+import { shortenUrl } from "./urlUtils"
+import { InteractiveLink } from "@/components/ui/interactive-link"
 
 export const linkify = (text: string): React.ReactNode[] => {
-    if (typeof text !== 'string') {
-        return [text];
-    }
-    const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
-    const matches = [...text.matchAll(urlRegex)];
-    
-    if (matches.length === 0) {
-        return [text];
-    }
+  if (typeof text !== "string") {
+    return [text]
+  }
+  const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#/%?=~_|!:,.;]*[-A-Z0-9+&@#/%=~_|])/gi
+  const matches = [...text.matchAll(urlRegex)]
 
-    const result: React.ReactNode[] = [];
-    let lastIndex = 0;
+  if (matches.length === 0) {
+    return [text]
+  }
 
-    matches.forEach((match, i) => {
-        const url = match[0];
-        const index = match.index!;
+  const result: React.ReactNode[] = []
+  let lastIndex = 0
 
-        // Add the text before the link
-        if (index > lastIndex) {
-            result.push(text.substring(lastIndex, index));
-        }
+  matches.forEach((match, i) => {
+    const url = match[0]
+    const index = match.index!
 
-        // Add the link with shortened text using InteractiveLink
-        result.push(
-            <InteractiveLink
-                key={i}
-                href={url}
-                title={url} // Show full URL on hover
-            >
-                {shortenUrl(url)}
-            </InteractiveLink>
-        );
-
-        lastIndex = index + url.length;
-    });
-
-    // Add the remaining text after the last link
-    if (lastIndex < text.length) {
-        result.push(text.substring(lastIndex));
+    if (index > lastIndex) {
+      result.push(text.substring(lastIndex, index))
     }
 
-    return result;
-};
+    result.push(
+      <InteractiveLink key={i} href={url} title={url}>
+        {shortenUrl(url)}
+      </InteractiveLink>
+    )
+
+    lastIndex = index + url.length
+  })
+
+  if (lastIndex < text.length) {
+    result.push(text.substring(lastIndex))
+  }
+
+  return result
+}

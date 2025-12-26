@@ -28,6 +28,6 @@ export default [
     settings: { react: { version: 'detect' } },
   },
   {
-    ignores: ['node_modules', '.next', 'dist', 'build'],
+    ignores: ['node_modules', '.next', 'dist', 'build', 'lib/supabase.types.ts'],
   },
 ]

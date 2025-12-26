@@ -1,24 +1,85 @@
 "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Edit, ExternalLink } from "lucide-react"
-import { useDocumentStore } from '@/lib/stores/documentStore'
-import type { Scene } from '@/lib/stores/documentStore'
-import React from 'react'
-import { linkify } from "@/lib/linkUtils"
-import { decodeHtmlEntities } from '@/lib/dataProcessor'
-import { sortScenes } from '@/lib/sortUtils'
-import { useTextSelection } from "@/hooks/use-text-selection"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { FloatingDecupageMenu } from "@/components/script/floating-decupage-menu"
 import { BreakdownModal } from "@/components/modal"
+import { useDocumentStore } from "@/lib/stores/documentStore"
+import type { AssetType, Scene, SortCriteria } from "@/lib/stores/documentStore"
+import { linkify } from "@/lib/linkUtils"
+import { getUserPreferences, saveUserPreferences } from "@/lib/api/preferences"
+import { decodeHtmlEntities } from "@/lib/dataProcessor"
+import { sortScenes } from "@/lib/sortUtils"
+import { sanitizePlainText } from "@/lib/sanitize"
+import { useTextSelection } from "@/hooks/use-text-selection"
 import { useToast } from "@/hooks/use-toast"
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
+import { useSupabaseUser } from "@/hooks/use-supabase-user"
+import { InteractiveLink } from "@/components/ui/interactive-link"
+import { z } from "zod"
+import { Clock3, Edit, FileText, Image as ImageIcon, Link2, Music, Video } from "lucide-react"
+import { TableViewRow } from "./table-view-row"
 
 interface TableViewProps {
   scenes: Scene[]
+}
+
+type AssetFormState = Record<string, { type: AssetType; value: string }>
+type PersistResult = { error: Error | null; localOnly?: boolean }
+
+const assetSchema = z
+  .object({
+    type: z.enum(["link", "image", "video", "audio", "timestamp", "document"]),
+    value: z.string().trim().min(1, "Preencha um valor"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "timestamp") {
+      if (!/^\d{1,2}:\d{2}(?::\d{2})?$/.test(data.value)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use formato HH:MM ou HH:MM:SS" })
+      }
+    } else {
+      try {
+        const url = new URL(data.value)
+        if (!["http:", "https:"].includes(url.protocol)) {
+          throw new Error("Invalid protocol")
+        }
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe uma URL valida (http/https)" })
+      }
+    }
+  })
+
+const assetLabels: Record<AssetType, string> = {
+  link: "Link",
+  image: "Imagem",
+  video: "Video",
+  audio: "Audio",
+  timestamp: "Timestamp",
+  document: "Documento",
+}
+
+const getAssetIcon = (type: AssetType) => {
+  switch (type) {
+    case "link":
+      return <Link2 className="h-3.5 w-3.5" />
+    case "image":
+      return <ImageIcon className="h-3.5 w-3.5" />
+    case "video":
+      return <Video className="h-3.5 w-3.5" />
+    case "audio":
+      return <Music className="h-3.5 w-3.5" />
+    case "timestamp":
+      return <Clock3 className="h-3.5 w-3.5" />
+    case "document":
+      return <FileText className="h-3.5 w-3.5" />
+    default:
+      return null
+  }
 }
 
 export function TableView({ scenes: initialScenes }: TableViewProps) {
@@ -26,233 +87,435 @@ export function TableView({ scenes: initialScenes }: TableViewProps) {
   const addAssetToScene = useDocumentStore((state) => state.addAssetToScene)
   const sortCriteria = useDocumentStore((state) => state.sortCriteria)
   const setSortCriteria = useDocumentStore((state) => state.setSortCriteria)
+  const setHoveredSceneId = useDocumentStore((state) => state.setHoveredSceneId)
   const { toast } = useToast()
+  const { userId } = useSupabaseUser()
 
-  // Modal State
   const [breakdownModalOpen, setBreakdownModalOpen] = useState(false)
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null)
+  const [assetInputs, setAssetInputs] = useState<AssetFormState>({})
+  const [savingAssetFor, setSavingAssetFor] = useState<string | null>(null)
 
-  // Text Selection Hook
-  const { text: selectedText, rect: selectionRect, isCollapsed } = useTextSelection();
+  const { text: selectedText, rect: selectionRect, range: selectionRange } = useTextSelection()
 
-  const scenes = React.useMemo(() => {
-    return sortScenes(initialScenes, sortCriteria)
-  }, [initialScenes, sortCriteria])
+  const isSelectionInScene = useMemo(() => {
+    if (!selectionRange) return false
+    const container = selectionRange.commonAncestorContainer
+    const element = container.nodeType === 1 ? (container as Element) : container.parentElement
+    return !!element?.closest("[data-scene-id]")
+  }, [selectionRange])
+  const supabaseClient = useMemo(() => createSupabaseBrowserClient(), [])
 
-  // Handlers
+  const scenes = useMemo(() => sortScenes(initialScenes, sortCriteria), [initialScenes, sortCriteria])
+
+  // Hydrate sort preference from Supabase
+  useEffect(() => {
+    const loadPrefs = async () => {
+      if (!userId) return
+      const { sortCriteria: remoteSort } = await getUserPreferences(userId)
+      if (remoteSort) {
+        setSortCriteria(remoteSort)
+      }
+    }
+    loadPrefs()
+  }, [userId, setSortCriteria])
+
+  useEffect(() => {
+    setAssetInputs((prev) => {
+      const next = { ...prev }
+      initialScenes.forEach((scene) => {
+        if (!next[scene.id]) {
+          next[scene.id] = { type: "link", value: "" }
+        }
+      })
+      return next
+    })
+  }, [initialScenes])
+
+  const updateSceneRemote = async (sceneId: string, payload: Partial<Scene>): Promise<PersistResult> => {
+    if (!userId) {
+      return { error: null, localOnly: true }
+    }
+
+    const { error } = await supabaseClient
+      .from("scenes")
+      .update({
+        status: payload.status,
+        editor_notes: payload.editorNotes,
+        narrative_text: payload.narrativeText,
+      })
+      .eq("id", sceneId)
+      .eq("user_id", userId)
+
+    return { error: error ? new Error(error.message) : null }
+  }
+
+  const saveAssetRemote = async (sceneId: string, type: AssetType, value: string): Promise<PersistResult> => {
+    const assetId = crypto.randomUUID()
+
+    if (!userId) {
+      addAssetToScene(sceneId, { id: assetId, type, value })
+      return { error: null, localOnly: true }
+    }
+
+    const { error } = await supabaseClient.from("scene_assets").insert({
+      id: assetId,
+      scene_id: sceneId,
+      user_id: userId,
+      asset_type: type,
+      asset_value: value,
+    })
+
+    if (!error) {
+      addAssetToScene(sceneId, { id: assetId, type, value })
+    }
+
+    return { error: error ? new Error(error.message) : null }
+  }
+
   const handleOpenBreakdown = (sceneId: string) => {
     setSelectedSceneId(sceneId)
     setBreakdownModalOpen(true)
   }
 
-  const handleMenuAction = (type: 'scene' | 'note' | 'timecode' | 'video' | 'image' | 'link', text: string) => {
-    // Try to find the scene ID from the selection context
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+  const handleMenuAction = async (
+    type: "scene" | "note" | "timecode" | "video" | "image" | "link",
+    text: string
+  ) => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
 
-    const range = selection.getRangeAt(0);
-    const container = range.commonAncestorContainer.nodeType === 1
-      ? range.commonAncestorContainer as Element
-      : range.commonAncestorContainer.parentElement;
+    const range = selection.getRangeAt(0)
+    const container =
+      range.commonAncestorContainer.nodeType === 1
+        ? (range.commonAncestorContainer as Element)
+        : range.commonAncestorContainer.parentElement
 
-    const sceneRow = container?.closest('[data-scene-id]');
-    const targetSceneId = sceneRow?.getAttribute('data-scene-id');
+    const sceneRow = container?.closest("[data-scene-id]")
+    const targetSceneId = sceneRow?.getAttribute("data-scene-id")
 
-    if (targetSceneId) {
-      const scene = scenes.find(s => s.id === targetSceneId);
-      if (!scene) return;
-
-      switch (type) {
-        case 'timecode':
-          addAssetToScene(targetSceneId, { id: crypto.randomUUID(), type: 'timestamp', value: text });
-          toast({ title: "Timestamp atualizado", description: '"' + text + '" adicionado à cena.' });
-          break;
-        case 'video':
-        case 'image':
-        case 'link':
-          addAssetToScene(targetSceneId, { id: crypto.randomUUID(), type: 'link', value: text });
-          toast({ title: "Link adicionado", description: "Link/Asset vinculado à cena." });
-          break;
-        case 'note':
-          updateScene(targetSceneId, { editorNotes: scene.editorNotes ? `${scene.editorNotes}\n${text}` : text });
-          toast({ title: "Nota adicionada", description: "Nota adicionada ao editor." });
-          break;
-        case 'scene':
-          updateScene(targetSceneId, { narrativeText: scene.narrativeText ? `${scene.narrativeText}\n${text}` : text });
-          toast({ title: "Texto narrativo atualizado", description: "Texto adicionado à narrativa da cena." });
-          break;
-      }
-    } else {
+    if (!targetSceneId) {
       toast({
         variant: "destructive",
-        title: "Ação inválida",
-        description: "Selecione um texto dentro de uma linha da tabela para vincular diretamente.",
+        title: "Selecione dentro da tabela",
+        description: "Escolha um texto dentro de uma linha para vincular direto a cena.",
       })
+      return
     }
 
-    // Clear selection after action
-    if (window.getSelection) {
-      window.getSelection()?.removeAllRanges();
+    const scene = scenes.find((s) => s.id === targetSceneId)
+    if (!scene) return
+
+    switch (type) {
+      case "timecode": {
+        const timeResult = await saveAssetRemote(targetSceneId, "timestamp", text)
+        if (timeResult.error) {
+          toast({ variant: "destructive", title: "Erro ao salvar timestamp", description: timeResult.error.message })
+        } else if (timeResult.localOnly) {
+          toast({ title: "Timestamp salvo localmente", description: "Entre para sincronizar com o Supabase." })
+        } else {
+          toast({ title: "Timestamp adicionado", description: `"${text}" ligado a cena.` })
+        }
+        break
+      }
+      case "video":
+      case "image":
+      case "link": {
+        const linkResult = await saveAssetRemote(targetSceneId, "link", text)
+        if (linkResult.error) {
+          toast({ variant: "destructive", title: "Erro ao salvar asset", description: linkResult.error.message })
+        } else if (linkResult.localOnly) {
+          toast({ title: "Link salvo localmente", description: "Entre para sincronizar com o Supabase." })
+        } else {
+          toast({ title: "Link criado", description: "Asset vinculado a cena." })
+        }
+        break
+      }
+      case "note": {
+        const newNotes = scene.editorNotes ? `${scene.editorNotes}\n${text}` : text
+        updateScene(targetSceneId, { editorNotes: newNotes })
+        const noteResult = await updateSceneRemote(targetSceneId, { editorNotes: newNotes })
+        if (noteResult.error) {
+          toast({ variant: "destructive", title: "Erro ao salvar nota", description: noteResult.error.message })
+        } else if (noteResult.localOnly) {
+          toast({ title: "Nota salva localmente", description: "Entre para sincronizar com o Supabase." })
+        } else {
+          toast({ title: "Nota salva", description: "Nota adicionada ao editor." })
+        }
+        break
+      }
+      case "scene": {
+        const newNarrative = scene.narrativeText ? `${scene.narrativeText}\n${text}` : text
+        updateScene(targetSceneId, { narrativeText: newNarrative })
+        const narrativeResult = await updateSceneRemote(targetSceneId, { narrativeText: newNarrative })
+        if (narrativeResult.error) {
+          toast({
+            variant: "destructive",
+            title: "Erro ao salvar trecho",
+            description: narrativeResult.error.message,
+          })
+        } else if (narrativeResult.localOnly) {
+          toast({ title: "Trecho salvo localmente", description: "Entre para sincronizar com o Supabase." })
+        } else {
+          toast({ title: "Trecho atualizado", description: "Texto anexado ao roteiro da cena." })
+        }
+        break
+      }
+      default:
+        break
     }
+
+    window.getSelection()?.removeAllRanges()
   }
 
   const handleClearSelection = () => {
-    if (window.getSelection) {
-      window.getSelection()?.removeAllRanges();
+    window.getSelection()?.removeAllRanges()
+  }
+
+  const handleStatusChange = async (sceneId: string, status: "Pendente" | "Concluido") => {
+    const scene = scenes.find((s) => s.id === sceneId)
+    if (!scene) return
+
+    const previous = scene.status
+    updateScene(sceneId, { status })
+    const result = await updateSceneRemote(sceneId, { status })
+
+    if (result.error) {
+      updateScene(sceneId, { status: previous })
+      toast({
+        variant: "destructive",
+        title: "Nao foi possivel salvar o status",
+        description: result.error.message,
+      })
+    } else if (result.localOnly) {
+      toast({ title: "Status salvo localmente", description: "Entre na conta para sincronizar com o Supabase." })
     }
   }
 
-  // Função para lidar com mudanças no status
-  const handleStatusChange = (sceneId: string, status: 'Pendente' | 'Concluído') => {
-    const scene = scenes.find(s => s.id === sceneId)
-    if (scene) {
-      updateScene(sceneId, { status })
-    }
-  }
-
-  // Função para lidar com mudanças nas notas do editor
   const handleNotesChange = (sceneId: string, notes: string) => {
-    const scene = scenes.find(s => s.id === sceneId)
-    if (scene) {
-      updateScene(sceneId, { editorNotes: notes })
+    updateScene(sceneId, { editorNotes: notes })
+  }
+
+  const handleNotesBlur = async (sceneId: string, notes: string) => {
+    const result = await updateSceneRemote(sceneId, { editorNotes: notes })
+
+    if (result.error) {
+      toast({
+        variant: "destructive",
+        title: "Nao foi possivel salvar a nota",
+        description: result.error.message,
+      })
+    } else if (result.localOnly) {
+      toast({ title: "Nota salva localmente", description: "Autentique-se para enviar ao Supabase." })
     }
   }
+
+  const handleAssetFieldChange = (sceneId: string, field: "type" | "value", value: string) => {
+    setAssetInputs((prev) => ({
+      ...prev,
+      [sceneId]: {
+        type: (field === "type" ? (value as AssetType) : prev[sceneId]?.type) ?? "link",
+        value: field === "value" ? value : prev[sceneId]?.value ?? "",
+      },
+    }))
+  }
+
+  const handleAddAsset = async (sceneId: string) => {
+    const form = assetInputs[sceneId] ?? { type: "link", value: "" }
+    const validation = assetSchema.safeParse(form)
+
+    if (!validation.success) {
+      const message = validation.error.issues[0]?.message ?? "Preencha os campos para salvar"
+      toast({ variant: "destructive", title: "Asset invalido", description: message })
+      return
+    }
+
+    setSavingAssetFor(sceneId)
+    const result = await saveAssetRemote(sceneId, validation.data.type, validation.data.value)
+    setSavingAssetFor(null)
+
+    if (result.error) {
+      toast({ variant: "destructive", title: "Erro ao salvar asset", description: result.error.message })
+      return
+    }
+
+    if (result.localOnly) {
+      toast({ title: "Asset salvo localmente", description: "Entre para sincronizar com o Supabase." })
+    } else {
+      toast({ title: "Asset salvo", description: "Asset enviado para o Supabase." })
+    }
+
+    setAssetInputs((prev) => ({
+      ...prev,
+      [sceneId]: { ...prev[sceneId], value: "" },
+    }))
+  }
+
+  const narrativeSortState =
+    sortCriteria && sortCriteria.startsWith("narrativeText")
+      ? sortCriteria.endsWith("desc")
+        ? "descending"
+        : "ascending"
+      : "none"
+
+  const commentSortState =
+    sortCriteria && sortCriteria.startsWith("rawComment")
+      ? sortCriteria.endsWith("desc")
+        ? "descending"
+        : "ascending"
+      : "none"
 
   return (
-    <>
-      <FloatingDecupageMenu
-        selectionRect={selectionRect}
-        selectedText={selectedText}
-        onAction={handleMenuAction}
-        onClearSelection={handleClearSelection}
-      />
+    <TooltipProvider delayDuration={120}>
+      {isSelectionInScene && (
+        <FloatingDecupageMenu
+          selectionRect={selectionRect}
+          selectedText={selectedText}
+          onAction={handleMenuAction}
+          onClearSelection={handleClearSelection}
+        />
+      )}
 
       {selectedSceneId && (
         <BreakdownModal
           isOpen={breakdownModalOpen}
           onClose={() => setBreakdownModalOpen(false)}
-          rowData={scenes.find(s => s.id === selectedSceneId)}
+          rowData={scenes.find((s) => s.id === selectedSceneId)}
         />
       )}
 
-      <div className="h-[calc(100vh-4rem)] overflow-auto p-6">
-        <div className="rounded-lg border border-border bg-card">
-          <div className="flex items-center justify-end p-4">
-            <Select value={sortCriteria || "none"} onValueChange={(value) => setSortCriteria(value === "none" ? null : value)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Ordenar por..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Ordem Original</SelectItem>
-                <SelectItem value="narrativeText_asc">Roteiro (A-Z)</SelectItem>
-                <SelectItem value="narrativeText_desc">Roteiro (Z-A)</SelectItem>
-                <SelectItem value="rawComment_asc">Comentário (A-Z)</SelectItem>
-                <SelectItem value="rawComment_desc">Comentário (Z-A)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="sticky top-0 bg-secondary/80 backdrop-blur">
-                <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[300px]">Trecho Narrado</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[300px]">Comentário Bruto</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Tipo de Mídia</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Link / Asset</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[100px]">Timestamp</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Diretriz/Nota</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[200px]">Notas do Editor</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold min-w-[150px]">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scenes.map((scene, index) => (
-                  <tr key={scene.id} data-scene-id={scene.id} className="border-b border-border/50 transition-colors hover:bg-secondary/30">
-                    <td className="px-6 py-4">
-                      <div className="max-w-md text-sm leading-relaxed">{linkify(decodeHtmlEntities(scene.narrativeText))}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="max-w-md text-sm leading-relaxed comment-text-overflow">{linkify(decodeHtmlEntities(scene.rawComment))}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Select>
-                        <SelectTrigger className="w-32 h-8 text-sm">
-                          <SelectValue placeholder="Tipo de mídia" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="link">Link</SelectItem>
-                          <SelectItem value="image">Imagem</SelectItem>
-                          <SelectItem value="video">Vídeo</SelectItem>
-                          <SelectItem value="audio">Áudio</SelectItem>
-                          <SelectItem value="document">Documento</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="px-6 py-4">
-                      {scene.assets.length > 0 ? (
-                        scene.assets.map((asset, assetIndex) => (
-                          <a
-                            key={assetIndex}
-                            href={asset.value}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            Ver Asset
-                          </a>
-                        ))
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <Input type="text" placeholder="00:00" className="w-24 h-8 text-sm bg-secondary/50" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-muted-foreground">—</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Select
-                        value={scene.status === 'Concluído' ? 'completed' : 'pending'}
-                        onValueChange={(value) => handleStatusChange(scene.id, value === 'completed' ? 'Concluído' : 'Pendente')}
-                      >
-                        <SelectTrigger className="w-32 h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">
-                            <Badge variant="secondary">Pendente</Badge>
-                          </SelectItem>
-                          <SelectItem value="completed">
-                            <Badge className="bg-chart-1">Concluído</Badge>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Input
-                        type="text"
-                        value={scene.editorNotes}
-                        onChange={(e) => handleNotesChange(scene.id, e.target.value)}
-                        placeholder="Adicionar nota..."
-                        className="max-w-xs h-8 text-sm bg-secondary/50"
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <Button size="sm" onClick={() => handleOpenBreakdown(scene.id)} className="h-8" aria-label={`Decupar ${scene.id}`}>
-                        <Edit className="mr-2 h-3 w-3" />
-                        Decupar
-                      </Button>
-                    </td>
+      <div className="flex h-full flex-col bg-background">
+        <div className="flex items-center justify-end gap-3 px-6 pt-4 pb-2 border-b border-border/40 bg-background/50 backdrop-blur-sm sticky top-0 z-20">
+          <Select
+            value={(sortCriteria ?? "none") as SortCriteria | "none"}
+            onValueChange={async (value) => {
+              const parsed = value === "none" ? null : (value as SortCriteria)
+              setSortCriteria(parsed)
+              if (userId) {
+                const { error } = await saveUserPreferences(userId, parsed)
+                if (error) {
+                  toast({
+                    variant: "destructive",
+                    title: "Erro ao salvar preferencia",
+                    description: error,
+                  })
+                }
+              }
+            }}
+          >
+            <SelectTrigger aria-label="Ordenar cenas" className="h-8 w-[180px] text-xs bg-secondary/50 border-transparent hover:bg-secondary">
+              <SelectValue placeholder="Ordenar por..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Ordem original</SelectItem>
+              <SelectItem value="narrativeText_asc">Trecho (A-Z)</SelectItem>
+              <SelectItem value="narrativeText_desc">Trecho (Z-A)</SelectItem>
+              <SelectItem value="rawComment_asc">Comentario (A-Z)</SelectItem>
+              <SelectItem value="rawComment_desc">Comentario (Z-A)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex-1 overflow-hidden">
+          {scenes.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <Empty className="border border-border bg-card/60 glass-panel">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FileText className="h-6 w-6" />
+                  </EmptyMedia>
+                  <EmptyTitle>Nenhuma cena importada</EmptyTitle>
+                  <EmptyDescription>
+                    Cole a URL de um Google Doc na tela de importacao para gerar a tabela.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <p className="text-sm text-muted-foreground">
+                    Quando houver cenas, elas aparecem aqui com status, assets e notas sincronizados.
+                  </p>
+                </EmptyContent>
+              </Empty>
+            </div>
+          ) : (
+            <div className="h-full overflow-auto">
+              <table className="w-full min-w-[1200px] table-fixed border-collapse text-sm">
+                <thead className="sticky top-0 z-10 bg-secondary/95 backdrop-blur shadow-sm">
+                  <tr className="border-b border-border">
+                    <th
+                      aria-sort={narrativeSortState as "none" | "ascending" | "descending" | "other" | undefined}
+                      scope="col"
+                      className="w-[20%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    >
+                      Trecho narrado
+                    </th>
+                    <th
+                      aria-sort={commentSortState as "none" | "ascending" | "descending" | "other" | undefined}
+                      scope="col"
+                      className="w-[20%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    >
+                      Comentario bruto
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[25%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                      colSpan={2}
+                    >
+                      Assets & Links
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[10%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    >
+                      Timestamp
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[8%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    >
+                      Info
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[10%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[15%] px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    >
+                      Notas
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[5%] px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    >
+
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-card">
+                  {scenes.map((scene) => (
+                    <TableViewRow
+                      key={scene.id}
+                      scene={scene}
+                      assetInput={assetInputs[scene.id] ?? { type: "link", value: "" }}
+                      onAssetInputChange={(field, value) => handleAssetFieldChange(scene.id, field, value)}
+                      onAddAsset={() => handleAddAsset(scene.id)}
+                      isSavingAsset={savingAssetFor === scene.id}
+                      onStatusChange={(status) => handleStatusChange(scene.id, status)}
+                      onNotesChange={(value) => handleNotesChange(scene.id, value)}
+                      onNotesBlur={(value) => handleNotesBlur(scene.id, value)}
+                      onOpenBreakdown={() => handleOpenBreakdown(scene.id)}
+                      setHoveredSceneId={setHoveredSceneId}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </TooltipProvider>
   )
 }

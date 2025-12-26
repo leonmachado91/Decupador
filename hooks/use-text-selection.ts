@@ -50,13 +50,22 @@ export function useTextSelection() {
     }, []);
 
     useEffect(() => {
-        document.addEventListener('selectionchange', handleSelectionChange);
-        // Handle scroll and resize to update position if needed, though selectionchange usually covers it
-        window.addEventListener('resize', handleSelectionChange);
+        let timeoutId: NodeJS.Timeout;
+
+        const onSelectionChange = () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                handleSelectionChange();
+            }, 150); // 150ms debounce
+        };
+
+        document.addEventListener('selectionchange', onSelectionChange);
+        window.addEventListener('resize', onSelectionChange);
 
         return () => {
-            document.removeEventListener('selectionchange', handleSelectionChange);
-            window.removeEventListener('resize', handleSelectionChange);
+            clearTimeout(timeoutId);
+            document.removeEventListener('selectionchange', onSelectionChange);
+            window.removeEventListener('resize', onSelectionChange);
         };
     }, [handleSelectionChange]);
 

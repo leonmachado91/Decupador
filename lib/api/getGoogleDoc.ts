@@ -42,8 +42,6 @@ export interface GoogleDocData {
   revisionId: string
 }
 
-type SupabaseFunctionResponse<T> = { data?: T; error?: { message?: string } }
-
 export async function getGoogleDoc(docId: string): Promise<{
   data: GoogleDocData | null
   error: string | null
@@ -54,10 +52,9 @@ export async function getGoogleDoc(docId: string): Promise<{
   }
 
   try {
-    const response = await supabase.functions.invoke('get-google-doc', {
+    const { data, error } = await supabase.functions.invoke<GoogleDocData>('get-google-doc', {
       body: { docId },
     })
-    const { data, error } = response as SupabaseFunctionResponse<GoogleDocData>
     if (error) {
       const msg = error.message || 'Erro desconhecido'
       return { data: null, error: `Erro ao acessar o documento: ${msg}` }

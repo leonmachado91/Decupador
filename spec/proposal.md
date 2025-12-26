@@ -1,36 +1,53 @@
-# Proposta: Previews e Ações em Links
+# Proposta de Melhoria UI/UX - Decupador
 
-## 1. Visão Geral
+## Visão Geral
+O objetivo desta proposta é elevar o nível visual e de usabilidade do aplicativo "Decupador", transformando-o de uma ferramenta funcional em um produto com sensação "premium", fluido e agradável de usar. Focaremos em consistência visual, feedback do usuário e micro-interações.
 
-Esta proposta detalha a implementação de duas funcionalidades para enriquecer a interação com links na aplicação:
-1.  **Ação Rápida de Cópia:** Um botão com um ícone aparecerá ao passar o mouse sobre um link, permitindo copiá-lo para a área de transferência com um único clique.
-2.  **Preview de Conteúdo:** Ao passar o mouse sobre um link de imagem ou vídeo (YouTube), um pequeno card aparecerá exibindo uma miniatura (thumbnail) do conteúdo.
+## 1. Identidade Visual e "Look & Feel"
 
-## 2. Arquitetura da Solução
+### 1.1. Refinamento do Glassmorphism
+- **Atual:** O Header já utiliza `backdrop-blur`, mas pode ser refinado.
+- **Proposta:** Aplicar um efeito de "vidro fosco" mais sofisticado não apenas no Header, mas também em elementos flutuantes (como o menu de decupagem) e modais.
+- **Ação:** Criar uma classe utilitária `.glass-panel` que combine `bg-background/80`, `backdrop-blur-md`, e uma borda sutil `border-white/10` (no dark mode) para dar profundidade.
 
-Para manter o código limpo e reutilizável, encapsularemos as novas funcionalidades em um componente dedicado.
+### 1.2. Tipografia e Leiturabilidade
+- **Atual:** Fonte Inter (padrão).
+- **Proposta:** Manter Inter para UI, mas considerar uma fonte Mono ou Serifada para o texto do Roteiro (Script View) para diferenciar o conteúdo da interface.
+- **Ação:** Aumentar o `line-height` (leading) no texto do roteiro para melhorar o conforto de leitura.
 
--   **Novo Componente - `InteractiveLink`:** Criaremos um novo componente em `components/ui/interactive-link.tsx`. Ele será responsável por renderizar o link e gerenciar toda a lógica de hover, incluindo o botão de cópia e o card de preview.
--   **Componente de UI - `HoverCard`:** Utilizaremos o componente `HoverCard` da biblioteca `shadcn/ui`, que já faz parte do projeto. Ele é ideal para exibir conteúdo rico, como uma imagem de preview, quando o usuário passa o mouse sobre um elemento.
--   **Refatoração do `linkify`:** A função `linkify` em `lib/linkUtils.tsx`, que hoje cria links simples (`<a>`), será modificada para usar o nosso novo e poderoso componente `InteractiveLink`.
+### 1.3. Paleta de Cores e Contraste
+- **Proposta:** Adicionar "accents" (cores de destaque) mais vibrantes para ações principais (botões primários) e feedbacks de sucesso/erro. Garantir que o Dark Mode tenha profundidade (não apenas preto chapado, mas tons de cinza escuro/slate).
 
-## 3. Implementação Detalhada
+## 2. Experiência do Usuário (UX) e Interações
 
-### 3.1. Botão de Cópia
+### 2.1. Feedback de Carregamento (Skeletons)
+- **Problema:** O overlay de tela cheia "Sincronizando cenas..." bloqueia o uso e parece antiquado.
+- **Solução:** Implementar **Skeleton Screens** (esqueletos de carregamento) para a lista de cenas e tabela. O usuário vê a estrutura da página carregando instantaneamente, o que reduz a percepção de espera.
+- **Local:** `ScriptView` e `TableView`.
 
-1.  O componente `InteractiveLink` terá um estado interno para controlar a visibilidade do botão.
-2.  Usando CSS (Tailwind), o botão de cópia (com um ícone da biblioteca `lucide-react`) será posicionado sobre o link. Ele ficará oculto por padrão e se tornará visível apenas no evento `hover`.
-3.  Ao ser clicado, o botão executará `navigator.clipboard.writeText()` para copiar a URL completa e usará o hook `useToast` para exibir uma notificação de sucesso ("Link copiado!").
+### 2.2. Transições Suaves (Motion)
+- **Proposta:** Adicionar animações sutis ao trocar entre "Visão Roteiro" e "Visão Tabela".
+- **Tecnologia:** Usar `framer-motion` para fazer um *cross-fade* ou *slide* suave entre as views.
+- **Micro-interações:** Botões devem ter feedback tátil visual (leve escala ao clicar).
 
-### 3.2. Preview de Conteúdo
+### 2.3. Navegação e Controle
+- **Header:** Substituir os dois botões de alternância de visualização por um **Segmented Control** (controle segmentado) com um indicador deslizante (fundo que se move para a opção ativa). Isso é um padrão de UI mais moderno e elegante.
 
-1.  O componente `InteractiveLink` será envolvido pelo `HoverCard` da `shadcn/ui`. O link em si funcionará como o gatilho (`HoverCardTrigger`).
-2.  O conteúdo do card (`HoverCardContent`) conterá a lógica para decidir o que exibir.
-3.  Criaremos uma função auxiliar, `getLinkPreview(url)`, que analisará a URL:
-    -   **Se for uma imagem** (terminando em `.jpg`, `.png`, `.gif`, etc.), a função retornará um componente `<img>` com a própria URL.
-    -   **Se for um vídeo do YouTube**, a função extrairá o ID do vídeo e retornará um `<img>` apontando para a URL de thumbnail fornecida pelo YouTube (`img.youtube.com/vi/<ID>/0.jpg`). Isso é muito mais leve do que carregar o player de vídeo.
-    -   Para qualquer outro tipo de link, nenhum preview será exibido.
+## 3. Melhorias em Componentes Específicos
 
-### 3.3. Impacto no Código Existente
+### 3.1. Menu Flutuante de Decupagem
+- **Proposta:** Torná-lo mais contextual. Ele deve aparecer suavemente próximo à seleção do usuário, com uma animação de entrada (fade-in + slide-up).
+- **Visual:** Aplicar o efeito `.glass-panel` e sombras suaves (`shadow-lg`).
 
-A beleza desta abordagem é seu baixo impacto. A única alteração no código existente será na função `linkify`, que passará a renderizar `<InteractiveLink />` em vez de `<a>`. Como `linkify` já é usado em toda a aplicação, as novas funcionalidades aparecerão em todos os lugares automaticamente.
+### 3.2. Tabela de Decupagem (TableView)
+- **Melhoria:** Fixar o cabeçalho da tabela (`sticky header`) para que o usuário não perca o contexto ao rolar listas longas.
+- **Responsividade:** Garantir que a tabela tenha rolagem horizontal suave em telas menores sem quebrar o layout da página.
+
+### 3.3. Tela de Importação (Empty State)
+- **Proposta:** Transformar a tela inicial (quando não há roteiro) em uma área de "Dropzone" convidativa, com ícones grandes, instruções claras e talvez uma ilustração sutil ou padrão de fundo para não parecer "vazia".
+
+## 4. Resumo Técnico das Mudanças
+1.  Instalar `framer-motion` para animações.
+2.  Criar componentes de UI reutilizáveis: `SegmentedControl`, `SkeletonLoader`.
+3.  Refatorar `MainInterface` para usar transições de estado.
+4.  Atualizar `globals.css` com novas classes utilitárias de vidro e sombras.

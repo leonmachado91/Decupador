@@ -69,7 +69,7 @@ export const convertCommentsToScenes = (
  * @param source Fonte do asset (opcional)
  * @returns Novo asset
  */
-export const createAsset = (type: string, value: string, source?: string): Asset => {
+export const createAsset = (type: Asset["type"], value: string, source?: string): Asset => {
   return {
     id: `asset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type,
